@@ -9,54 +9,12 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Platform,
-  // Dimensions,
-  TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { CustomButton } from "@/components/ui/CustomButton";
 
-interface ShuffleTextProps {
-  text: string;
-  delay?: number;
-  style?: TextStyle | TextStyle[];
-}
-
-// Shuffle Text Component for React Native
-const ShuffleText = ({ text, delay = 0, style = {} }: ShuffleTextProps) => {
-  const [displayText, setDisplayText] = useState(text.split("").map(() => " "));
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%&*";
-  const intervalRef = useRef<any>(null);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      let iteration = 0;
-
-      intervalRef.current = setInterval(() => {
-        setDisplayText((prev) =>
-          text.split("").map((letter, index) => {
-            if (letter === " " || letter === "\n") return letter;
-            if (index < iteration) return text[index];
-            return chars[Math.floor(Math.random() * chars.length)];
-          })
-        );
-
-        iteration += 0.25;
-
-        if (iteration >= text.length) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          setDisplayText(text.split(""));
-        }
-      }, 30);
-    }, delay);
-
-    return () => {
-      clearTimeout(timeout);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [text, delay]);
-
-  return <Text style={style}>{displayText.join("")}</Text>;
-};
+import { ShuffleText } from "@/components/ui/ShuffleText";
 
 export default function AnimatedLoginScreen() {
   const router = useRouter();
@@ -80,7 +38,7 @@ export default function AnimatedLoginScreen() {
     new Animated.Value(-50), // Phone
     new Animated.Value(-50), // Password
     new Animated.Value(-50), // Checkbox/Terms
-    new Animated.Value(0.8), // Button (scale)
+    new Animated.Value(0.5), // Button (scale)
     new Animated.Value(0), // Sign up link opacity
   ]).current;
 
@@ -143,8 +101,8 @@ export default function AnimatedLoginScreen() {
         }),
         Animated.spring(inputAnims[3], {
           toValue: 1,
-          friction: 8,
-          tension: 50,
+          friction: 3,
+          tension: 20,
           useNativeDriver: true,
         }),
       ]),
@@ -158,27 +116,91 @@ export default function AnimatedLoginScreen() {
     inputAnims,
   ]);
 
-  const handlePhoneChange = (text: string) => {
-    if (phoneError) setPhoneError("");
+  const validatePassword = (pass: string) => {
+    // Strong password logic
+    const strongRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    return strongRegex.test(pass);
+  };
 
+  const triggerShake = (index: number) => {
+    Animated.sequence([
+      Animated.timing(inputAnims[index], {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(inputAnims[index], {
+        toValue: -10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(inputAnims[index], {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(inputAnims[index], {
+        toValue: 0,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handlePhoneChange = (text: string) => {
     // Remove all non-digits
     let digits = text.replace(/\D/g, "");
 
-    // Normalize: if it starts with 92, treat it as the country code
+    // If it starts with 92, just keep the digits after 92
     if (digits.startsWith("92")) {
       digits = digits.slice(2);
-    }
-
-    // If it starts with 0 (like 0300), remove the leading 0
-    if (digits.startsWith("0")) {
+    } else if (digits.startsWith("0")) {
+      // If it starts with 0, remove it
       digits = digits.slice(1);
     }
 
-    // Format as +92 + remaining digits
-    if (digits.length > 0) {
-      setPhone("+92" + digits);
+    // Limit digits to 10 for Pakistani mobile numbers
+    digits = digits.slice(0, 10);
+
+    const formattedPhone = digits.length > 0 ? "+92 " + digits : "";
+    setPhone(formattedPhone);
+
+    // REAL-TIME INVALID INPUT CHECK:
+    // Pakistani mobile numbers MUST start with '3'
+    if (digits.length > 0 && digits[0] !== "3") {
+      setPhoneError("Invalid Pakistani mobile number");
+    } else if (
+      digits.length === 0 ||
+      (digits.length > 0 && digits[0] === "3")
+    ) {
+      if (
+        phoneError === "Invalid Pakistani mobile number" ||
+        digits.length === 10
+      ) {
+        setPhoneError("");
+      }
+    }
+  };
+
+  const handlePhoneBlur = () => {
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length > 0) {
+      if (cleanPhone.length !== 12 || cleanPhone[2] !== "3") {
+        setPhoneError("Invalid Pakistani phone number");
+        triggerShake(0);
+      } else {
+        setPhoneError("");
+      }
+    }
+  };
+
+  const handlePasswordBlur = () => {
+    if (password.length > 0 && !validatePassword(password)) {
+      setPasswordError("Strong password is required");
+      triggerShake(1);
     } else {
-      setPhone("");
+      setPasswordError("");
     }
   };
 
@@ -187,21 +209,23 @@ export default function AnimatedLoginScreen() {
     setPasswordError("");
     let hasError = false;
 
-    if (!phone) {
-      setPhoneError("Phone number is required");
-      hasError = true;
-    } else if (phone.length < 13) {
-      setPhoneError("Please enter a valid Pakistani phone number");
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (!phone || cleanPhone.length !== 12 || cleanPhone[2] !== "3") {
+      setPhoneError("Valid Pakistani phone number is required");
+      triggerShake(0);
       hasError = true;
     }
 
-    if (!password) {
-      setPasswordError("Password is required");
+    if (!validatePassword(password)) {
+      setPasswordError(
+        "Strong password is required (8+ chars, uppercase, number, special char)"
+      );
+      triggerShake(1);
       hasError = true;
     }
 
     if (hasError) return;
-    router.push("/");
+    router.push("/home");
   };
 
   return (
@@ -246,102 +270,116 @@ export default function AnimatedLoginScreen() {
           ]}
         >
           {/* Phone Input */}
-          <Animated.View style={{ transform: [{ translateX: inputAnims[0] }] }}>
-            <View style={styles.inputWrapper}>
-              <Ionicons
-                name="call-outline"
-                size={20}
-                color="#6B9A9C"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[
-                  styles.input,
-                  focusedInput === "phone" && styles.inputFocused,
-                  phoneError ? styles.inputError : null,
-                ]}
-                placeholder="Phone No."
-                value={phone}
-                onChangeText={handlePhoneChange}
-                onFocus={() => setFocusedInput("phone")}
-                onBlur={() => setFocusedInput(null)}
-                placeholderTextColor="#8F8F8F"
-                keyboardType="phone-pad"
-                maxLength={13}
-              />
-            </View>
-            {phoneError ? (
-              <Text style={styles.errorText}>{phoneError}</Text>
-            ) : null}
+          <Animated.View
+            style={[
+              styles.inputWrapper,
+              {
+                transform: [{ translateX: inputAnims[0] }],
+                marginBottom: 15,
+              },
+            ]}
+          >
+            <Ionicons
+              name="call-outline"
+              size={20}
+              color="#6B9A9C"
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={[
+                styles.input,
+                focusedInput === "phone" && styles.inputFocused,
+                phoneError ? styles.inputError : null,
+              ]}
+              placeholder="Phone No. (+92 3XXXXXXXXX)"
+              value={phone}
+              onChangeText={handlePhoneChange}
+              onFocus={() => setFocusedInput("phone")}
+              onBlur={() => {
+                setFocusedInput(null);
+                handlePhoneBlur();
+              }}
+              placeholderTextColor="#8F8F8F"
+              keyboardType="phone-pad"
+              maxLength={14}
+            />
           </Animated.View>
 
           {/* Password Input */}
           <Animated.View
-            style={{
-              transform: [{ translateX: inputAnims[1] }],
-              marginTop: 16,
-            }}
+            style={[
+              styles.inputWrapper,
+              {
+                transform: [{ translateX: inputAnims[1] }],
+                marginBottom: 15,
+              },
+            ]}
           >
-            <View style={styles.inputWrapper}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={20}
+              color="#6B9A9C"
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={[
+                styles.input,
+                { paddingRight: 50 },
+                focusedInput === "password" && styles.inputFocused,
+                passwordError ? styles.inputError : null,
+              ]}
+              placeholder="Password"
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (passwordError) setPasswordError("");
+              }}
+              onFocus={() => setFocusedInput("password")}
+              onBlur={() => {
+                setFocusedInput(null);
+                handlePasswordBlur();
+              }}
+              placeholderTextColor="#8F8F8F"
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
+              activeOpacity={0.7}
+            >
               <Ionicons
-                name="lock-closed-outline"
-                size={20}
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={22}
                 color="#6B9A9C"
-                style={styles.inputIcon}
               />
-              <TextInput
-                style={[
-                  styles.input,
-                  { paddingRight: 50 },
-                  focusedInput === "password" && styles.inputFocused,
-                  passwordError ? styles.inputError : null,
-                ]}
-                placeholder="Password"
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  if (passwordError) setPasswordError("");
-                }}
-                onFocus={() => setFocusedInput("password")}
-                onBlur={() => setFocusedInput(null)}
-                placeholderTextColor="#8F8F8F"
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                style={styles.eyeIcon}
-                onPress={() => setShowPassword(!showPassword)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
-                  size={20}
-                  color="#6B9A9C"
-                />
-              </TouchableOpacity>
-            </View>
-            {passwordError ? (
-              <Text style={styles.errorText}>{passwordError}</Text>
-            ) : null}
+            </TouchableOpacity>
           </Animated.View>
 
           {/* Checkbox */}
           <Animated.View
-            style={{
-              transform: [{ translateX: inputAnims[2] }],
-              marginTop: 20,
-            }}
+            style={[
+              styles.checkboxRow,
+              {
+                transform: [{ translateX: inputAnims[2] }],
+                marginTop: 5,
+                marginBottom: 20,
+              },
+            ]}
           >
             <TouchableOpacity
-              style={styles.checkboxRow}
+              style={[styles.checkbox, rememberMe && styles.checked]}
               onPress={() => setRememberMe(!rememberMe)}
               activeOpacity={0.7}
             >
-              <View style={[styles.checkbox, rememberMe && styles.checked]}>
-                {rememberMe && (
-                  <Ionicons name="checkmark" size={14} color="#fff" />
-                )}
-              </View>
+              {rememberMe && (
+                <Ionicons name="checkmark" size={14} color="#fff" />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setRememberMe(!rememberMe)}
+              activeOpacity={0.7}
+            >
               <Text style={styles.rememberText}>
                 I agree to the Terms & Privacy
               </Text>
@@ -351,34 +389,54 @@ export default function AnimatedLoginScreen() {
           {/* Login Button */}
           <Animated.View
             style={{
-              transform: [
-                {
-                  scale: inputAnims[3],
-                },
-              ],
+              transform: [{ scale: inputAnims[3] }],
               marginTop: 10,
             }}
           >
-            <TouchableOpacity
-              style={styles.loginBtn}
+            <CustomButton
+              title="Login"
+              variant="primary"
               onPress={handleLogin}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.loginBtnText}>Login</Text>
-            </TouchableOpacity>
+              style={styles.loginBtnCustom}
+            />
           </Animated.View>
 
-          {/* Sign Up Link */}
-          <TouchableOpacity
-            onPress={() => router.push("/sign-up")}
-            activeOpacity={0.7}
-            style={styles.signupContainer}
-          >
-            <Text style={styles.signupText}>
-              Don&apos;t have an account?{" "}
-              <Text style={styles.signupLink}>Sign Up</Text>
-            </Text>
-          </TouchableOpacity>
+          {/* Divider */}
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.divider} />
+          </View>
+
+          {/* Google Login Button */}
+          <CustomButton
+            title="Continue with Google"
+            variant="google"
+            icon="logo-google"
+            onPress={() => console.log("Google Sign Up")}
+            style={styles.googleButton}
+          />
+
+          {/* Footer Links */}
+          <View style={styles.footerLinks}>
+            <TouchableOpacity
+              onPress={() => router.push("/sign-up")}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.signupText}>
+                Don&apos;t have an account?{" "}
+                <Text style={styles.signupLink}>Sign Up</Text>
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => router.push("/forgot-password")}
+              activeOpacity={0.7}
+              style={styles.forgotBottomContainer}
+            >
+              <Text style={styles.forgotBottomText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -400,11 +458,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 40,
-    shadowColor: "#1E7C7E",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#1E7C7E",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 15,
+      },
+      android: {
+        elevation: 10,
+      },
+      web: {
+        boxShadow: "0px 10px 15px rgba(30, 124, 126, 0.3)",
+      },
+    }),
   },
   textContainer: {
     height: 140,
@@ -428,11 +495,20 @@ const styles = StyleSheet.create({
     marginTop: 20,
     borderRadius: 30,
     padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: "0px 5px 10px rgba(0, 0, 0, 0.1)",
+      },
+    }),
   },
   inputWrapper: {
     position: "relative",
@@ -459,7 +535,8 @@ const styles = StyleSheet.create({
   eyeIcon: {
     position: "absolute",
     right: 16,
-    zIndex: 10,
+    zIndex: 999,
+    elevation: 5,
     padding: 4,
   },
   inputError: {
@@ -488,6 +565,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 10,
+    paddingLeft: 0,
   },
   checkbox: {
     width: 20,
@@ -507,24 +585,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#5A5A5A",
   },
-  loginBtn: {
-    backgroundColor: "#1E7C7E",
-    borderRadius: 25,
+  loginBtnCustom: {
     height: 52,
-    justifyContent: "center",
+    marginBottom: 0,
+  },
+  dividerContainer: {
+    flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#1E7C7E",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 8,
+    marginVertical: 20,
   },
-  loginBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 17,
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#D0D0D0",
   },
-  signupContainer: {
+  dividerText: {
+    marginHorizontal: 15,
+    color: "#8F8F8F",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  googleButton: {
+    marginBottom: 10,
+  },
+  footerLinks: {
     marginTop: 20,
     alignItems: "center",
   },
@@ -535,5 +619,13 @@ const styles = StyleSheet.create({
   signupLink: {
     fontWeight: "700",
     color: "#1E7C7E",
+  },
+  forgotBottomContainer: {
+    marginTop: 12,
+  },
+  forgotBottomText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6B9A9C",
   },
 });

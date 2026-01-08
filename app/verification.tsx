@@ -10,54 +10,12 @@ import {
   ScrollView,
   Platform,
   Alert,
-  TextStyle,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-interface ShuffleTextProps {
-  text: string;
-  delay?: number;
-  style?: TextStyle | TextStyle[];
-}
-
-// Shuffle Text Component for React Native
-const ShuffleText = ({ text, delay = 0, style = {} }: ShuffleTextProps) => {
-  const [displayText, setDisplayText] = useState(text.split("").map(() => " "));
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%&*";
-  const intervalRef = useRef<any>(null);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      let iteration = 0;
-
-      intervalRef.current = setInterval(() => {
-        setDisplayText((prev) =>
-          text.split("").map((letter, index) => {
-            if (letter === " " || letter === "\n") return letter;
-            if (index < iteration) return text[index];
-            return chars[Math.floor(Math.random() * chars.length)];
-          })
-        );
-
-        iteration += 0.25;
-
-        if (iteration >= text.length) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          setDisplayText(text.split(""));
-        }
-      }, 30);
-    }, delay);
-
-    return () => {
-      clearTimeout(timeout);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [text, delay]);
-
-  return <Text style={style}>{displayText.join("")}</Text>;
-};
+import { ShuffleText } from "@/components/ui/ShuffleText";
 
 const AnimatedElement = ({
   index,
@@ -82,7 +40,7 @@ const AnimatedElement = ({
 
 export default function VerificationScreen() {
   const router = useRouter();
-  const { phone, fromSignUp } = useLocalSearchParams();
+  const { phone } = useLocalSearchParams();
   const [code, setCode] = useState(["", "", "", ""]);
   const [error, setError] = useState("");
   const [timer, setTimer] = useState(60);
@@ -91,16 +49,17 @@ export default function VerificationScreen() {
   const inputRefs = useRef<TextInput[]>([]);
 
   // Animation values
-  const fadeAnims = useRef<Animated.Value[]>([]).current;
-  const slideAnims = useRef<Animated.Value[]>([]).current;
+  const fadeAnims = useRef<Animated.Value[]>(
+    Array(4)
+      .fill(0)
+      .map(() => new Animated.Value(0))
+  ).current;
+  const slideAnims = useRef<Animated.Value[]>(
+    Array(4)
+      .fill(0)
+      .map(() => new Animated.Value(30))
+  ).current;
   const buttonScaleAnim = useRef(new Animated.Value(0.8)).current;
-
-  if (fadeAnims.length === 0) {
-    for (let i = 0; i < 4; i++) {
-      fadeAnims.push(new Animated.Value(0));
-      slideAnims.push(new Animated.Value(30));
-    }
-  }
 
   useEffect(() => {
     const animations = fadeAnims.map((anim, index) =>
@@ -154,7 +113,10 @@ export default function VerificationScreen() {
     }
   };
 
-  const handleKeyPress = (e: any, index: number) => {
+  const handleKeyPress = (
+    e: { nativeEvent: { key: string } },
+    index: number
+  ) => {
     if (e.nativeEvent.key === "Backspace" && !code[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -180,11 +142,8 @@ export default function VerificationScreen() {
       });
 
       if (response.ok) {
-        if (fromSignUp === "true") {
-          router.push("/");
-        } else {
-          router.push("/");
-        }
+        // Navigate to home screen after successful verification
+        router.replace("/home");
       } else {
         setError("Invalid verification code");
       }
@@ -247,11 +206,10 @@ export default function VerificationScreen() {
             slideAnims={slideAnims}
           >
             <ShuffleText text="Verification" delay={300} style={styles.title} />
-            <ShuffleText
-              text={`Enter the 4-digit code sent to\n${phone}`}
-              delay={600}
-              style={styles.subtitle}
-            />
+            <Text style={styles.subtitle}>
+              Enter the 4-digit code sent to{"\n"}
+              {phone}
+            </Text>
           </AnimatedElement>
         </LinearGradient>
 
@@ -391,14 +349,23 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "600",
     color: "#333",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: "0px 2px 4px rgba(0, 0, 0, 0.1)",
+      },
+    }),
   },
   codeInputError: {
     borderColor: "#E74C3C",
@@ -416,14 +383,23 @@ const styles = StyleSheet.create({
     height: 52,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#1E7C7E",
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#1E7C7E",
+        shadowOffset: {
+          width: 0,
+          height: 6,
+        },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 12,
+      },
+      web: {
+        boxShadow: "0px 6px 8px rgba(30, 124, 126, 0.4)",
+      },
+    }),
     marginTop: 24,
   },
   verifyButtonText: {

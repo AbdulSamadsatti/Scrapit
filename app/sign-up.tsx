@@ -9,53 +9,11 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Platform,
-  TextStyle,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-
-interface ShuffleTextProps {
-  text: string;
-  delay?: number;
-  style?: TextStyle | TextStyle[];
-}
-
-// Shuffle Text Component for React Native
-const ShuffleText = ({ text, delay = 0, style = {} }: ShuffleTextProps) => {
-  const [displayText, setDisplayText] = useState(text.split("").map(() => " "));
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%&*";
-  const intervalRef = useRef<any>(null);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      let iteration = 0;
-
-      intervalRef.current = setInterval(() => {
-        setDisplayText((prev) =>
-          text.split("").map((letter, index) => {
-            if (letter === " " || letter === "\n") return letter;
-            if (index < iteration) return text[index];
-            return chars[Math.floor(Math.random() * chars.length)];
-          })
-        );
-
-        iteration += 0.25;
-
-        if (iteration >= text.length) {
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          setDisplayText(text.split(""));
-        }
-      }, 30);
-    }, delay);
-
-    return () => {
-      clearTimeout(timeout);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [text, delay]);
-
-  return <Text style={style}>{displayText.join("")}</Text>;
-};
+import { CustomButton } from "@/components/ui/CustomButton";
+import { ShuffleText } from "@/components/ui/ShuffleText";
 
 export default function AnimatedSignUpScreen() {
   const router = useRouter();
@@ -66,13 +24,7 @@ export default function AnimatedSignUpScreen() {
   const [agree, setAgree] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
-
-  // Validation error states
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [rePasswordError, setRePasswordError] = useState<string | null>(null);
-  const [agreeError, setAgreeError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, boolean>>({});
 
   // Refs for TextInput focus management
   const nameInputRef = useRef<TextInput>(null);
@@ -187,78 +139,124 @@ export default function AnimatedSignUpScreen() {
     inputAnims,
   ]);
 
+  const validatePassword = (pass: string) => {
+    // Strong password: min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
+    const strongRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    return strongRegex.test(pass);
+  };
+
   const handlePhoneChange = (text: string) => {
     // Remove all non-digits
     let digits = text.replace(/\D/g, "");
 
-    // Normalize: if it starts with 92, treat it as the country code
+    // Handle country code 92
     if (digits.startsWith("92")) {
       digits = digits.slice(2);
-    }
-
-    // If it starts with 0 (like 0300), remove the leading 0
-    if (digits.startsWith("0")) {
+    } else if (digits.startsWith("0")) {
+      // If it starts with 0, remove it
       digits = digits.slice(1);
     }
 
-    // Format as +92 + remaining digits
-    if (digits.length > 0) {
-      setPhone("+92" + digits);
-    } else {
-      setPhone("");
+    // Limit to 10 digits (Pakistani mobile format: 3XXXXXXXXX)
+    digits = digits.slice(0, 10);
+
+    const formattedPhone = digits.length > 0 ? "+92 " + digits : "";
+    setPhone(formattedPhone);
+
+    // REAL-TIME INVALID INPUT CHECK:
+    // In Pakistan, mobile numbers MUST start with '3'
+    if (digits.length > 0 && digits[0] !== "3") {
+      setErrors((prev) => ({ ...prev, phone: true }));
+    } else if (
+      digits.length === 0 ||
+      (digits.length > 0 && digits[0] === "3")
+    ) {
+      // Clear error while typing if user starts correcting or clears
+      if (
+        errors.phone &&
+        (digits.length === 10 || digits.length === 0 || digits[0] === "3")
+      ) {
+        setErrors((prev) => ({ ...prev, phone: false }));
+      }
     }
   };
 
-  const handleSignUp = () => {
-    // Reset all errors
-    setNameError(null);
-    setPhoneError(null);
-    setPasswordError(null);
-    setRePasswordError(null);
-    setAgreeError(null);
+  const handlePhoneBlur = () => {
+    const cleanPhone = phone.replace(/\D/g, "");
+    // Pakistani mobile number must be exactly 12 digits (+92 + 10 digits starting with 3)
+    if (cleanPhone.length > 0) {
+      if (cleanPhone.length !== 12 || cleanPhone[2] !== "3") {
+        setErrors((prev) => ({ ...prev, phone: true }));
+        triggerShake(1);
+      } else {
+        setErrors((prev) => ({ ...prev, phone: false }));
+      }
+    }
+  };
 
-    let hasError = false;
+  const triggerShake = (index: number) => {
+    Animated.sequence([
+      Animated.timing(inputAnims[index], {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(inputAnims[index], {
+        toValue: -10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(inputAnims[index], {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(inputAnims[index], {
+        toValue: 0,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleSignUp = () => {
+    const newErrors: Record<string, boolean> = {};
 
     if (!name.trim()) {
-      setNameError("Please enter your full name");
-      hasError = true;
+      newErrors.name = true;
+      triggerShake(0);
     }
 
-    if (!phone.trim()) {
-      setPhoneError("Please enter your phone number");
-      hasError = true;
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length !== 12) {
+      // +92 is 2 digits + 10 digits = 12
+      newErrors.phone = true;
+      triggerShake(1);
     }
 
-    if (phone.length < 13) {
-      setPhoneError("Please enter a valid phone number (+92XXXXXXXXXX)");
-      hasError = true;
+    if (!validatePassword(password)) {
+      newErrors.password = true;
+      triggerShake(2);
     }
 
-    if (!password) {
-      setPasswordError("Please enter a password");
-      hasError = true;
-    }
-
-    if (password.length < 6) {
-      setPasswordError("Password must be at least 6 characters long");
-      hasError = true;
-    }
-
-    if (password !== rePassword) {
-      setRePasswordError("Passwords do not match");
-      hasError = true;
+    if (password !== rePassword || !rePassword) {
+      newErrors.rePassword = true;
+      triggerShake(3);
     }
 
     if (!agree) {
-      setAgreeError("Please agree to the terms and conditions");
-      hasError = true;
+      newErrors.agree = true;
+      triggerShake(4);
     }
 
-    if (hasError) {
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
       return;
     }
 
-    // If all validations pass, navigate to verification
+    // Pass phone number and fromSignUp flag to verification screen
     router.push({
       pathname: "/verification",
       params: { phone: phone, fromSignUp: "true" },
@@ -266,270 +264,292 @@ export default function AnimatedSignUpScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <View style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
       >
-        <Animated.View
-          style={[
-            styles.card,
-            {
-              opacity: cardOpacity,
-              transform: [{ translateY: cardTranslateY }, { scale: cardScale }],
-            },
-          ]}
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.textContainer}>
-            <ShuffleText text="Create" delay={300} style={styles.heading} />
-            <ShuffleText text="Account" delay={600} style={styles.heading} />
-            <ShuffleText
-              text="Sign up to get started"
-              delay={1000}
-              style={styles.subtitle}
-            />
-          </View>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.form,
-            {
-              opacity: formOpacity,
-              transform: [{ translateY: formTranslateY }],
-            },
-          ]}
-        >
-          <Animated.View style={{ transform: [{ translateX: inputAnims[0] }] }}>
-            <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  ref={nameInputRef}
-                  style={[
-                    styles.input,
-                    focusedInput === "name" && styles.inputFocused,
-                    nameError && styles.inputError,
-                  ]}
-                  placeholder="Full Name"
-                  value={name}
-                  onChangeText={(text) => {
-                    setName(text);
-                    setNameError(null); // Clear error on change
-                  }}
-                  onFocus={() => setFocusedInput("name")}
-                  onBlur={() => setFocusedInput(null)}
-                  placeholderTextColor="#8F8F8F"
-                  autoCapitalize="words"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => phoneInputRef.current?.focus()}
-                />
-                {nameError && <Text style={styles.errorText}>{nameError}</Text>}
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color="#1E7C7E"
-                  style={styles.icon}
-                />
-              </View>
+          <Animated.View
+            style={[
+              styles.card,
+              {
+                opacity: cardOpacity,
+                transform: [
+                  { translateY: cardTranslateY },
+                  { scale: cardScale },
+                ],
+              },
+            ]}
+          >
+            <View style={styles.textContainer}>
+              <ShuffleText text="Create" delay={300} style={styles.heading} />
+              <ShuffleText text="Account" delay={600} style={styles.heading} />
+              <ShuffleText
+                text="Sign up to get started"
+                delay={1000}
+                style={styles.subtitle}
+              />
             </View>
-          </Animated.View>
-
-          <Animated.View style={{ transform: [{ translateX: inputAnims[1] }] }}>
-            <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  ref={phoneInputRef}
-                  style={[
-                    styles.input,
-                    focusedInput === "phone" && styles.inputFocused,
-                    phoneError && styles.inputError,
-                  ]}
-                  placeholder="Phone No. (+92XXXXXXXXXX)"
-                  value={phone}
-                  onChangeText={(text) => {
-                    handlePhoneChange(text);
-                    setPhoneError(null); // Clear error on change
-                  }}
-                  onFocus={() => setFocusedInput("phone")}
-                  onBlur={() => setFocusedInput(null)}
-                  placeholderTextColor="#8F8F8F"
-                  keyboardType="phone-pad"
-                  maxLength={13}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => passwordInputRef.current?.focus()}
-                />
-                {phoneError && (
-                  <Text style={styles.errorText}>{phoneError}</Text>
-                )}
-                <Ionicons
-                  name="call-outline"
-                  size={20}
-                  color="#1E7C7E"
-                  style={styles.icon}
-                />
-              </View>
-            </View>
-          </Animated.View>
-
-          <Animated.View style={{ transform: [{ translateX: inputAnims[2] }] }}>
-            <View style={styles.inputContainer}>
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  ref={passwordInputRef}
-                  style={[
-                    styles.passwordInput,
-                    focusedInput === "password" && styles.inputFocused,
-                    passwordError && styles.inputError,
-                  ]}
-                  placeholder="Password"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    setPasswordError(null); // Clear error on change
-                  }}
-                  onFocus={() => setFocusedInput("password")}
-                  onBlur={() => setFocusedInput(null)}
-                  placeholderTextColor="#8F8F8F"
-                  autoCapitalize="none"
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => rePasswordInputRef.current?.focus()}
-                />
-                {passwordError && (
-                  <Text style={styles.errorText}>{passwordError}</Text>
-                )}
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color="#1E7C7E"
-                  style={styles.icon}
-                />
-                <TouchableOpacity
-                  style={styles.eyeIcon}
-                  onPress={() => setShowPassword(!showPassword)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={22}
-                    color="#1E7C7E"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Animated.View>
-
-          <Animated.View style={{ transform: [{ translateX: inputAnims[3] }] }}>
-            <View style={styles.inputContainer}>
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  ref={rePasswordInputRef}
-                  style={[
-                    styles.passwordInput,
-                    focusedInput === "rePassword" && styles.inputFocused,
-                    rePasswordError && styles.inputError,
-                  ]}
-                  placeholder="Retype Password"
-                  secureTextEntry={!showPassword}
-                  value={rePassword}
-                  onChangeText={(text) => {
-                    setRePassword(text);
-                    setRePasswordError(null); // Clear error on change
-                  }}
-                  onFocus={() => setFocusedInput("rePassword")}
-                  onBlur={() => setFocusedInput(null)}
-                  placeholderTextColor="#8F8F8F"
-                  autoCapitalize="none"
-                  returnKeyType="done"
-                  blurOnSubmit={true}
-                  onSubmitEditing={() => handleSignUp()}
-                />
-                {rePasswordError && (
-                  <Text style={styles.errorText}>{rePasswordError}</Text>
-                )}
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color="#1E7C7E"
-                  style={styles.icon}
-                />
-                <TouchableOpacity
-                  style={styles.eyeIcon}
-                  onPress={() => setShowPassword(!showPassword)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={22}
-                    color="#1E7C7E"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Animated.View>
-
-          <Animated.View style={{ transform: [{ translateX: inputAnims[4] }] }}>
-            <View style={styles.checkboxContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.checkbox,
-                  agree && styles.checked,
-                  agreeError && styles.checkboxError,
-                ]}
-                onPress={() => {
-                  setAgree(!agree);
-                  setAgreeError(null); // Clear error on change
-                }}
-                activeOpacity={0.7}
-              >
-                {agree && <Ionicons name="checkmark" size={14} color="#fff" />}
-              </TouchableOpacity>
-              <Text style={styles.checkboxText}>
-                I agree to the Terms and Conditions
-              </Text>
-            </View>
-            {agreeError && <Text style={styles.errorText}>{agreeError}</Text>}
           </Animated.View>
 
           <Animated.View
-            style={{
-              transform: [
-                {
-                  scale: inputAnims[5],
-                },
-              ],
-              marginTop: 10,
-            }}
+            style={[
+              styles.form,
+              {
+                opacity: formOpacity,
+                transform: [{ translateY: formTranslateY }],
+              },
+            ]}
           >
-            <TouchableOpacity
-              style={styles.signupBtn}
-              onPress={handleSignUp}
-              activeOpacity={0.8}
+            <Animated.View
+              style={{ transform: [{ translateX: inputAnims[0] }] }}
             >
-              <Text style={styles.signupBtnText}>Sign Up</Text>
+              <View style={styles.inputContainer}>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    ref={nameInputRef}
+                    style={[
+                      styles.input,
+                      focusedInput === "name" && styles.inputFocused,
+                      errors.name && styles.inputError,
+                    ]}
+                    placeholder="Full Name"
+                    value={name}
+                    onChangeText={(text) => {
+                      setName(text);
+                      if (errors.name) setErrors({ ...errors, name: false });
+                    }}
+                    onFocus={() => setFocusedInput("name")}
+                    onBlur={() => setFocusedInput(null)}
+                    placeholderTextColor="#8F8F8F"
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                    onSubmitEditing={() => phoneInputRef.current?.focus()}
+                  />
+                  <Ionicons
+                    name="person-outline"
+                    size={20}
+                    color="#6B9A9C"
+                    style={styles.icon}
+                  />
+                </View>
+              </View>
+            </Animated.View>
+
+            <Animated.View
+              style={{ transform: [{ translateX: inputAnims[1] }] }}
+            >
+              <View style={styles.inputContainer}>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    ref={phoneInputRef}
+                    style={[
+                      styles.input,
+                      focusedInput === "phone" && styles.inputFocused,
+                      errors.phone && styles.inputError,
+                    ]}
+                    placeholder="Phone Number"
+                    value={phone}
+                    onChangeText={(text) => {
+                      handlePhoneChange(text);
+                      if (errors.phone) setErrors({ ...errors, phone: false });
+                    }}
+                    onFocus={() => setFocusedInput("phone")}
+                    onBlur={() => {
+                      setFocusedInput(null);
+                      handlePhoneBlur();
+                    }}
+                    placeholderTextColor="#8F8F8F"
+                    keyboardType="phone-pad"
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
+                  />
+                  <Ionicons
+                    name="call-outline"
+                    size={20}
+                    color="#6B9A9C"
+                    style={styles.icon}
+                  />
+                </View>
+              </View>
+            </Animated.View>
+
+            <Animated.View
+              style={{ transform: [{ translateX: inputAnims[2] }] }}
+            >
+              <View style={styles.inputContainer}>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    ref={passwordInputRef}
+                    style={[
+                      styles.passwordInput,
+                      focusedInput === "password" && styles.inputFocused,
+                      errors.password && styles.inputError,
+                    ]}
+                    placeholder="Password"
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      if (errors.password)
+                        setErrors({ ...errors, password: false });
+                    }}
+                    onFocus={() => setFocusedInput("password")}
+                    onBlur={() => setFocusedInput(null)}
+                    placeholderTextColor="#8F8F8F"
+                    autoCapitalize="none"
+                    returnKeyType="next"
+                    onSubmitEditing={() => rePasswordInputRef.current?.focus()}
+                  />
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={20}
+                    color="#6B9A9C"
+                    style={styles.icon}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowPassword(!showPassword)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
+                      size={22}
+                      color="#6B9A9C"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Animated.View>
+
+            <Animated.View
+              style={{ transform: [{ translateX: inputAnims[3] }] }}
+            >
+              <View style={styles.inputContainer}>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    ref={rePasswordInputRef}
+                    style={[
+                      styles.passwordInput,
+                      focusedInput === "rePassword" && styles.inputFocused,
+                      errors.rePassword && styles.inputError,
+                    ]}
+                    placeholder="Confirm Password"
+                    secureTextEntry={!showPassword}
+                    value={rePassword}
+                    onChangeText={(text) => {
+                      setRePassword(text);
+                      if (errors.rePassword)
+                        setErrors({ ...errors, rePassword: false });
+                    }}
+                    onFocus={() => setFocusedInput("rePassword")}
+                    onBlur={() => setFocusedInput(null)}
+                    placeholderTextColor="#8F8F8F"
+                    autoCapitalize="none"
+                    returnKeyType="done"
+                    onSubmitEditing={handleSignUp}
+                  />
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={20}
+                    color="#6B9A9C"
+                    style={styles.icon}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIcon}
+                    onPress={() => setShowPassword(!showPassword)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
+                      size={22}
+                      color="#6B9A9C"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Animated.View>
+
+            <Animated.View
+              style={{ transform: [{ translateX: inputAnims[4] }] }}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.checkboxContainer,
+                  errors.agree && {
+                    borderColor: "#FF5252",
+                    borderWidth: 1,
+                    borderRadius: 10,
+                    padding: 5,
+                    backgroundColor: "#FFF8F8",
+                  },
+                ]}
+                onPress={() => {
+                  setAgree(!agree);
+                  if (errors.agree) setErrors({ ...errors, agree: false });
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, agree && styles.checked]}>
+                  {agree && (
+                    <Ionicons name="checkmark" size={14} color="#fff" />
+                  )}
+                </View>
+                <Text style={styles.checkboxText} numberOfLines={1}>
+                  I agree to the Terms and Conditions
+                </Text>
+              </TouchableOpacity>
+            </Animated.View>
+
+            <Animated.View
+              style={{
+                transform: [{ scale: inputAnims[5] }],
+                marginTop: 5,
+              }}
+            >
+              <CustomButton
+                title="Sign Up"
+                variant="primary"
+                onPress={handleSignUp}
+                style={styles.signupBtnCustom}
+              />
+            </Animated.View>
+
+            {/* Divider */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.divider} />
+            </View>
+
+            {/* Google Login Button */}
+            <CustomButton
+              title="Continue with Google"
+              variant="google"
+              icon="logo-google"
+              onPress={() => console.log("Google Sign Up")}
+              style={styles.googleButton}
+            />
+
+            <TouchableOpacity
+              onPress={() => router.push("/log-in")}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.footerText}>
+                Already have an account?{" "}
+                <Text style={styles.footerLink}>Login</Text>
+              </Text>
             </TouchableOpacity>
           </Animated.View>
-
-          <TouchableOpacity
-            onPress={() => router.push("/log-in")}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.signupText}>
-              Already have an account?{" "}
-              <Text style={styles.signupLink}>Login</Text>
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -540,43 +560,42 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
+    paddingBottom: 40,
   },
   card: {
     backgroundColor: "#1E7C7E",
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
     paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
+    paddingTop: 40,
+    paddingBottom: 20,
     shadowColor: "#1E7C7E",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 15,
     elevation: 10,
-    overflow: "hidden",
   },
   textContainer: {
-    height: 140,
+    height: 100,
     justifyContent: "center",
   },
   heading: {
     color: "#fff",
-    fontSize: 42,
+    fontSize: 32,
     fontWeight: "700",
-    lineHeight: 48,
+    lineHeight: 38,
   },
   subtitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "300",
-    marginTop: 8,
+    color: "rgba(255, 255, 255, 0.7)",
+    fontSize: 14,
+    marginTop: 4,
   },
   form: {
     backgroundColor: "rgba(255, 255, 255, 0.9)",
     marginHorizontal: 20,
-    marginTop: 20,
+    marginTop: 10,
     borderRadius: 30,
-    padding: 24,
+    padding: 20,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.1,
@@ -584,70 +603,72 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   inputContainer: {
-    marginBottom: 18,
+    marginBottom: 12,
   },
   inputWrapper: {
     position: "relative",
   },
   input: {
     backgroundColor: "#EAF6F7",
-    borderRadius: 30,
-    paddingLeft: 50,
+    borderRadius: 25,
+    paddingLeft: 45,
     paddingRight: 20,
-    height: 50,
+    height: 52,
     borderWidth: 1,
     borderColor: "#9AC6C8",
+    fontSize: 15,
     color: "#000",
+  },
+  inputError: {
+    borderColor: "#FF5252",
+    backgroundColor: "#FFF8F8",
   },
   passwordContainer: {
     position: "relative",
+    width: "100%",
   },
   passwordInput: {
+    width: "100%",
     backgroundColor: "#EAF6F7",
-    borderRadius: 30,
-    paddingLeft: 50,
+    borderRadius: 25,
+    paddingLeft: 45,
     paddingRight: 50,
-    height: 50,
+    height: 52,
     borderWidth: 1,
     borderColor: "#9AC6C8",
+    fontSize: 15,
     color: "#000",
   },
   icon: {
     position: "absolute",
-    left: 18,
-    top: 15,
+    left: 16,
+    top: 16,
     zIndex: 10,
   },
   eyeIcon: {
     position: "absolute",
-    right: 18,
-    top: 13,
-    zIndex: 10,
+    right: 16,
+    top: 16,
+    zIndex: 999,
+    elevation: 5,
   },
   inputFocused: {
     borderColor: "#1E7C7E",
     borderWidth: 2,
-    shadowColor: "#1E7C7E",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
   checkboxContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
-    marginTop: 10,
+    marginBottom: 15,
+    marginTop: 5,
+    paddingLeft: 0,
   },
   checkbox: {
     width: 20,
     height: 20,
     borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: "#1E7C7E",
+    borderColor: "#6B9A9C",
     marginRight: 10,
     justifyContent: "center",
     alignItems: "center",
@@ -659,48 +680,39 @@ const styles = StyleSheet.create({
   checkboxText: {
     color: "#5A5A5A",
     fontSize: 14,
-    fontWeight: "400",
-    flex: 1,
   },
-  signupText: {
+  signupBtnCustom: {
+    height: 52,
+    borderRadius: 25,
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#D0D0D0",
+  },
+  dividerText: {
+    marginHorizontal: 15,
+    color: "#8F8F8F",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  googleButton: {
+    marginBottom: 15,
+    height: 52,
+    borderRadius: 25,
+  },
+  footerText: {
     textAlign: "center",
-    marginTop: 20,
     color: "#5A5A5A",
     fontSize: 14,
   },
-  signupLink: {
+  footerLink: {
     color: "#1E7C7E",
     fontWeight: "700",
-  },
-  inputError: {
-    borderColor: "#FF6B6B",
-    borderWidth: 2,
-  },
-  checkboxError: {
-    borderColor: "#FF6B6B",
-    borderWidth: 2,
-  },
-  errorText: {
-    color: "#FF6B6B",
-    fontSize: 12,
-    marginTop: 5,
-    marginLeft: 5,
-  },
-  signupBtn: {
-    backgroundColor: "#1E7C7E",
-    borderRadius: 25,
-    height: 52,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#1E7C7E",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 8,
-  },
-  signupBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 17,
   },
 });

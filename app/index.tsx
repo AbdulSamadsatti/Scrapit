@@ -6,10 +6,12 @@ import {
   Animated,
   Dimensions,
   AppState,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import InfinityLoader from "@/components/ui/InfinityLoader";
 
 const { width } = Dimensions.get("window");
 
@@ -98,10 +100,11 @@ export default function CinematicSplash() {
         useNativeDriver: true,
       }).start();
 
+      // Loading entrance
       Animated.timing(loadingOpacity, {
         toValue: 1,
-        duration: 1000,
-        delay: 800,
+        duration: 800,
+        delay: 1200,
         useNativeDriver: true,
       }).start();
     };
@@ -129,9 +132,10 @@ export default function CinematicSplash() {
       }
     });
 
+    // Navigate to login after splash animation
     const timer = setTimeout(() => {
-      router.push("/log-in");
-    }, 3500);
+      router.replace("/log-in");
+    }, 5000);
 
     // Start animations initially
     startAnimations();
@@ -140,8 +144,16 @@ export default function CinematicSplash() {
       clearTimeout(timer);
       subscription.remove();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [
+    floatAnim,
+    rotateAnim1,
+    rotateAnim2,
+    breatheAnim,
+    titleOpacity,
+    titleScale,
+    taglineOpacity,
+    loadingOpacity,
+  ]);
 
   const floatInterpolate = floatAnim.interpolate({
     inputRange: [0, 0.5, 1],
@@ -168,24 +180,34 @@ export default function CinematicSplash() {
       <View
         style={[
           styles.topGlow,
-          {
-            shadowColor: "#22c55e",
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.15,
-            shadowRadius: 120,
-          },
+          Platform.select({
+            ios: {
+              shadowColor: "#22c55e",
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.15,
+              shadowRadius: 120,
+            },
+            web: {
+              boxShadow: "0px 0px 120px rgba(34, 197, 94, 0.15)",
+            },
+          }),
         ]}
       />
 
       <View
         style={[
           styles.bottomGlow,
-          {
-            shadowColor: "#047857",
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.1,
-            shadowRadius: 100,
-          },
+          Platform.select({
+            ios: {
+              shadowColor: "#047857",
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.1,
+              shadowRadius: 100,
+            },
+            web: {
+              boxShadow: "0px 0px 100px rgba(4, 120, 87, 0.1)",
+            },
+          }),
         ]}
       />
 
@@ -232,11 +254,16 @@ export default function CinematicSplash() {
               name="infinite"
               size={80}
               color="#4ade80"
-              style={{
-                textShadowColor: "rgba(74, 222, 128, 0.6)",
-                textShadowOffset: { width: 0, height: 0 },
-                textShadowRadius: 15,
-              }}
+              style={Platform.select({
+                ios: {
+                  textShadowColor: "rgba(74, 222, 128, 0.6)",
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 15,
+                },
+                web: {
+                  textShadow: "0px 0px 15px rgba(74, 222, 128, 0.6)",
+                },
+              })}
             />
           </View>
         </Animated.View>
@@ -277,9 +304,7 @@ export default function CinematicSplash() {
           },
         ]}
       >
-        <View style={styles.loadingBar}>
-          <View style={styles.loadingFill} />
-        </View>
+        <InfinityLoader size={0.6} />
         <Text style={styles.loadingText}>INITIALIZING</Text>
       </Animated.View>
     </LinearGradient>
@@ -366,18 +391,29 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.05)",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#4ade80",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 30,
-    elevation: 15,
-    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#4ade80",
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.3,
+        shadowRadius: 30,
+      },
+      android: {
+        elevation: 15,
+      },
+      web: {
+        boxShadow: "0px 0px 30px rgba(74, 222, 128, 0.3)",
+      },
+    }),
     zIndex: 5,
   },
 
   reflection: {
     position: "absolute",
-    inset: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: "rgba(9, 120, 142, 0.05)",
     borderRadius: 32,
   },
@@ -412,23 +448,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 48,
     alignItems: "center",
-    gap: 12,
     zIndex: 10,
-  },
-
-  loadingBar: {
-    width: 48,
-    height: 4,
-    backgroundColor: "rgba(64, 64, 64, 0.6)",
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-
-  loadingFill: {
-    width: "33%",
-    height: "100%",
-    backgroundColor: "#22c55e",
-    borderRadius: 2,
   },
 
   loadingText: {
