@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -11,6 +11,9 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
+import { Sidebar } from "../components/ui/Sidebar";
+import Carousel3D from "../components/ui/animated Carousels";
+import LottieHamburger from "../components/ui/Hamburger";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { InteractiveMenu } from "../components/ui/modern-mobile-menu";
@@ -22,6 +25,7 @@ import {
   User,
   MessageSquare,
   Heart,
+  Menu,
 } from "lucide-react-native";
 
 const { width } = Dimensions.get("window");
@@ -165,13 +169,33 @@ export default function HomePage() {
   const scrollY = useRef(new Animated.Value(0)).current;
   const categoriesAnim = useRef(new Animated.Value(0)).current;
   const trendingAnim = useRef(new Animated.Value(0)).current;
-  const heroFlatListRef = useRef<FlatList>(null);
-  const [activeHeroIndex, setActiveHeroIndex] = React.useState(0);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedCategory, setSelectedCategory] = React.useState("All");
   const [likedItems, setLikedItems] = React.useState<{
     [key: string]: boolean;
   }>({});
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMenuVisualOpen, setIsMenuVisualOpen] = useState(false);
+
+  const handleMenuPress = () => {
+    if (!isSidebarOpen) {
+      // Start hamburger animation first
+      setIsMenuVisualOpen(true);
+      // Delay sidebar opening by 300ms
+      setTimeout(() => {
+        setIsSidebarOpen(true);
+      }, 300);
+    } else {
+      // Close everything together
+      setIsSidebarOpen(false);
+      setIsMenuVisualOpen(false);
+    }
+  };
+
+  const handleSidebarClose = () => {
+    setIsSidebarOpen(false);
+    setIsMenuVisualOpen(false);
+  };
 
   const filteredTrendingItems = React.useMemo(() => {
     return TRENDING_ITEMS.filter((item) => {
@@ -208,13 +232,6 @@ export default function HomePage() {
     });
   }, [searchQuery, selectedCategory]);
 
-  const toggleLike = (id: string) => {
-    setLikedItems((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
   useEffect(() => {
     // Entrance animations
     Animated.parallel([
@@ -232,31 +249,14 @@ export default function HomePage() {
         useNativeDriver: true,
       }),
     ]).start();
+  }, [categoriesAnim, trendingAnim]);
 
-    // Auto-play hero carousel
-    const interval = setInterval(() => {
-      setActiveHeroIndex((prevIndex) => {
-        const nextIndex = (prevIndex + 1) % HERO_ITEMS.length;
-        heroFlatListRef.current?.scrollToIndex({
-          index: nextIndex,
-          animated: true,
-        });
-        return nextIndex;
-      });
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [categoriesAnim, trendingAnim, heroFlatListRef]);
-
-  const renderHeroItem = ({ item }: { item: HeroItem }) => (
-    <View style={styles.heroItem}>
-      <Image source={{ uri: item.image }} style={styles.heroImage} />
-      <View style={styles.heroOverlay}>
-        <Text style={styles.heroTitle}>{item.title}</Text>
-        <Text style={styles.heroSubtitle}>{item.subtitle}</Text>
-      </View>
-    </View>
-  );
+  const toggleLike = (id: string) => {
+    setLikedItems((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
 
   const renderCategory = ({
     item,
@@ -409,11 +409,18 @@ export default function HomePage() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Sidebar isVisible={isSidebarOpen} onClose={handleSidebarClose} />
       <StatusBar barStyle="light-content" />
 
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
+          <TouchableOpacity
+            onPress={handleMenuPress}
+            style={{ marginRight: 8, marginLeft: 4, zIndex: 2 }}
+          >
+            <LottieHamburger isOpen={isMenuVisualOpen} size={36} />
+          </TouchableOpacity>
           <View style={styles.logoContainer}>
             <InfinityLoader size={0.9} />
             <Text style={styles.logoText}>SCRAPIT</Text>
@@ -436,13 +443,6 @@ export default function HomePage() {
               "Food",
             ]}
           />
-
-          <TouchableOpacity
-            style={styles.filterButton}
-            onPress={() => {}}
-          >
-            <Ionicons name="options-outline" size={24} color="#fff" />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -455,32 +455,8 @@ export default function HomePage() {
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: 80 }}
       >
-        {/* Hero Carousel */}
-        <View style={styles.heroContainer}>
-          <FlatList
-            ref={heroFlatListRef}
-            data={HERO_ITEMS}
-            renderItem={renderHeroItem}
-            keyExtractor={(item) => item.id}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(event) => {
-              const index = Math.round(
-                event.nativeEvent.contentOffset.x / (width - 32)
-              );
-              setActiveHeroIndex(index);
-            }}
-          />
-          <View style={styles.pagination}>
-            {HERO_ITEMS.map((_, i) => (
-              <View
-                key={i}
-                style={[styles.dot, i === activeHeroIndex && styles.activeDot]}
-              />
-            ))}
-          </View>
-        </View>
+        {/* Hero Carousel - 3D Animated */}
+        <Carousel3D data={HERO_ITEMS} />
 
         {/* Categories Section */}
         <View style={styles.sectionHeader}>
@@ -545,26 +521,27 @@ const styles = StyleSheet.create({
     height: 60,
     position: "relative",
     paddingHorizontal: 0,
+    marginTop: 4,
   },
   logoContainer: {
     flexDirection: "row",
     alignItems: "center",
     zIndex: 1,
     position: "absolute",
-    left: 10,
-    top: 6,
+    left: 44, // Moved right to make space for menu icon
+    top: 4,
   },
   logoText: {
     color: "#ffffff",
     fontSize: 22,
     fontWeight: "900",
     letterSpacing: 1,
-    marginLeft: 10,
+    marginLeft: -10,
   },
   searchContainer: {
     position: "absolute",
-    right: 58,
-    top: 6,
+    right: 1,
+    top: 26,
     zIndex: 10,
   },
   filterButton: {
@@ -575,62 +552,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     position: "absolute",
-    right: 10,
-    top: 6,
-  },
-  heroContainer: {
-    margin: 16,
-    height: 200,
-    borderRadius: 20,
-    overflow: "hidden",
-    backgroundColor: "#ddd",
-    position: "relative",
-  },
-  heroItem: {
-    width: width - 32,
-    height: 200,
-    position: "relative",
-  },
-  heroImage: {
-    width: "100%",
-    height: "100%",
-  },
-  heroOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    backgroundColor: "rgba(0,0,0,0.3)",
-  },
-  heroTitle: {
-    color: "#fff",
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  heroSubtitle: {
-    color: "rgba(255, 255, 255, 0.8)",
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  pagination: {
-    position: "absolute",
-    bottom: 12,
-    right: 20,
-    flexDirection: "row",
-    gap: 6,
-    alignItems: "center",
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
-  },
-  activeDot: {
-    backgroundColor: "#fff",
-    width: 12,
+    right: -5,
+    top: 25,
   },
   sectionHeader: {
     flexDirection: "row",

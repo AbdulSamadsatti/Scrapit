@@ -13,6 +13,7 @@ import {
   FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Filter from "./Filter";
 
 const THEME_COLOR = "#1E7C7E";
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -74,6 +75,7 @@ export const SearchBar = ({
   const toggleSearch = () => {
     if (!isExpanded) {
       setIsExpanded(true);
+      setShowDropdown(true); // Automatically open dropdown when expanding
     }
   };
 
@@ -91,20 +93,25 @@ export const SearchBar = ({
     setShowDropdown(false);
   };
 
-   const barWidth = expandAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [42, SCREEN_WIDTH - 190], // Adjusted for new positions
-    });
+  const barWidth = expandAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [90, SCREEN_WIDTH - 80], // Increased collapsed width to fit both icons
+  });
 
-    const opacity = expandAnim.interpolate({
-      inputRange: [0, 0.5, 1],
-      outputRange: [0, 0, 1],
-    });
+  const filterOpacity = expandAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 0, 0], // Hide when expanded
+  });
 
-    const barBackground = expandAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: ["rgba(255, 255, 255, 0.15)", "#FFFFFF"],
-    });
+  const opacity = expandAnim.interpolate({
+    inputRange: [0, 0.2, 1], // Faster opacity fade in
+    outputRange: [0, 1, 1],
+  });
+
+  const barBackground = expandAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["rgba(255, 255, 255, 0.15)", "#FFFFFF"],
+  });
 
   const handleCategorySelect = (category: string) => {
     setInternalSelectedCategory(category);
@@ -131,13 +138,19 @@ export const SearchBar = ({
         ]}
       >
         {!isExpanded ? (
-          <TouchableOpacity
-            style={styles.searchIconContainer}
-            onPress={toggleSearch}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="search" size={20} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.collapsedIconsContainer}>
+            <TouchableOpacity
+              style={styles.searchIconContainer}
+              onPress={toggleSearch}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="search" size={20} color="#fff" />
+            </TouchableOpacity>
+            <View style={styles.iconDivider} />
+            <Animated.View style={{ opacity: filterOpacity }}>
+              <Filter size={20} onPress={() => setShowDropdown(true)} />
+            </Animated.View>
+          </View>
         ) : (
           <View style={styles.expandedContent}>
             <TouchableOpacity
@@ -242,6 +255,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     alignSelf: "center",
   },
+  collapsedIconsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    height: "100%",
+  },
+  iconDivider: {
+    width: 1,
+    height: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    marginHorizontal: 2,
+  },
   expandedContent: {
     flexDirection: "row",
     alignItems: "center",
@@ -252,8 +278,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingRight: 8,
-    minWidth: 90,
-    gap: 6,
+    minWidth: 70, // Reduced from 90 to give more space to input
+    gap: 4,
   },
   categoryText: {
     fontSize: 12,
@@ -271,9 +297,10 @@ const styles = StyleSheet.create({
   },
   input: {
     fontSize: 15,
-    color: "#333",
+    color: "#000000", // Forced solid black for better visibility
     paddingHorizontal: 8,
     height: "100%",
+    minWidth: 100, // Ensure there's a minimum width
   },
   closeButton: {
     padding: 4,
