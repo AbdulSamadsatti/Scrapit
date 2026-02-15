@@ -12,22 +12,26 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { CustomButton } from "@/components/ui/CustomButton";
 import { ShuffleText } from "@/components/ui/ShuffleText";
 
 export default function AnimatedSignUpScreen() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("+92 ");
   const [password, setPassword] = useState("");
   const [rePassword, setRePassword] = useState("");
   const [agree, setAgree] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
-  const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
 
   // Refs for TextInput focus management
   const nameInputRef = useRef<TextInput>(null);
+  const emailInputRef = useRef<TextInput>(null);
   const phoneInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const rePasswordInputRef = useRef<TextInput>(null);
@@ -41,6 +45,7 @@ export default function AnimatedSignUpScreen() {
   const formTranslateY = useRef(new Animated.Value(50)).current;
 
   const inputAnims = useRef([
+    new Animated.Value(-50), // Email
     new Animated.Value(-50), // Name
     new Animated.Value(-50), // Phone
     new Animated.Value(-50), // Password
@@ -122,6 +127,12 @@ export default function AnimatedSignUpScreen() {
             useNativeDriver: true,
           }),
           Animated.spring(inputAnims[5], {
+            toValue: 0,
+            friction: 7,
+            tension: 40,
+            useNativeDriver: true,
+          }),
+          Animated.spring(inputAnims[6], {
             toValue: 1,
             friction: 3,
             tension: 20,
@@ -139,11 +150,20 @@ export default function AnimatedSignUpScreen() {
     inputAnims,
   ]);
 
-  const validatePassword = (pass: string) => {
-    // Strong password: min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
-    const strongRegex =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    return strongRegex.test(pass);
+  const validatePassword = (pass: string): string => {
+    // Strong password validation with specific error messages
+    if (pass.length < 8) {
+      return "Password must be at least 8 characters";
+    } else if (!/[a-z]/.test(pass)) {
+      return "Password must contain lowercase letter";
+    } else if (!/[A-Z]/.test(pass)) {
+      return "Password must contain uppercase letter";
+    } else if (!/\d/.test(pass)) {
+      return "Password must contain number";
+    } else if (!/[@$!%*?&]/.test(pass)) {
+      return "Password must contain special character";
+    }
+    return "";
   };
 
   const handlePhoneChange = (text: string) => {
@@ -154,43 +174,43 @@ export default function AnimatedSignUpScreen() {
     if (digits.startsWith("92")) {
       digits = digits.slice(2);
     } else if (digits.startsWith("0")) {
-      // If it starts with 0, remove it
       digits = digits.slice(1);
     }
 
-    // Limit to 10 digits (Pakistani mobile format: 3XXXXXXXXX)
+    // Limit to 10 digits
     digits = digits.slice(0, 10);
 
     const formattedPhone = digits.length > 0 ? "+92 " + digits : "";
     setPhone(formattedPhone);
 
-    // REAL-TIME INVALID INPUT CHECK:
-    // In Pakistan, mobile numbers MUST start with '3'
     if (digits.length > 0 && digits[0] !== "3") {
-      setErrors((prev) => ({ ...prev, phone: true }));
-    } else if (
-      digits.length === 0 ||
-      (digits.length > 0 && digits[0] === "3")
-    ) {
-      // Clear error while typing if user starts correcting or clears
-      if (
-        errors.phone &&
-        (digits.length === 10 || digits.length === 0 || digits[0] === "3")
-      ) {
-        setErrors((prev) => ({ ...prev, phone: false }));
-      }
+      setErrors((prev) => ({
+        ...prev,
+        phone: "Invalid Pakistani mobile number - must start with 3",
+      }));
+      triggerShake(2); // Phone index
+    } else {
+      setErrors((prev) => ({ ...prev, phone: "" }));
     }
   };
 
   const handlePhoneBlur = () => {
     const cleanPhone = phone.replace(/\D/g, "");
-    // Pakistani mobile number must be exactly 12 digits (+92 + 10 digits starting with 3)
-    if (cleanPhone.length > 0) {
-      if (cleanPhone.length !== 12 || cleanPhone[2] !== "3") {
-        setErrors((prev) => ({ ...prev, phone: true }));
-        triggerShake(1);
+    if (cleanPhone.length > 0 && cleanPhone !== "92") {
+      if (cleanPhone.length !== 12) {
+        setErrors((prev) => ({
+          ...prev,
+          phone: "Invalid phone number format",
+        }));
+        triggerShake(2);
+      } else if (cleanPhone[2] !== "3") {
+        setErrors((prev) => ({
+          ...prev,
+          phone: "Invalid mobile number: Must start with 3",
+        }));
+        triggerShake(2);
       } else {
-        setErrors((prev) => ({ ...prev, phone: false }));
+        setErrors((prev) => ({ ...prev, phone: "" }));
       }
     }
   };
@@ -220,34 +240,48 @@ export default function AnimatedSignUpScreen() {
     ]).start();
   };
 
-  const handleSignUp = () => {
-    const newErrors: Record<string, boolean> = {};
+  const handleSignUp = async () => {
+    const newErrors: Record<string, string> = {};
 
-    if (!name.trim()) {
-      newErrors.name = true;
+    if (!email.trim()) {
+      newErrors.email = "Email is required";
+      triggerShake(0);
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      newErrors.email = "Invalid email format";
       triggerShake(0);
     }
 
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length !== 12) {
-      // +92 is 2 digits + 10 digits = 12
-      newErrors.phone = true;
+    if (!name.trim()) {
+      newErrors.name = "Name is required";
       triggerShake(1);
     }
 
-    if (!validatePassword(password)) {
-      newErrors.password = true;
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length === 0) {
+      newErrors.phone = "Phone number is required";
+      triggerShake(2);
+    } else if (cleanPhone.length !== 12) {
+      newErrors.phone = "Invalid phone number format";
+      triggerShake(2);
+    } else if (cleanPhone[2] !== "3") {
+      newErrors.phone = "Invalid mobile number: Must start with 3";
       triggerShake(2);
     }
 
-    if (password !== rePassword || !rePassword) {
-      newErrors.rePassword = true;
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      newErrors.password = passwordError;
       triggerShake(3);
     }
 
-    if (!agree) {
-      newErrors.agree = true;
+    if (password !== rePassword || !rePassword) {
+      newErrors.rePassword = "Passwords do not match";
       triggerShake(4);
+    }
+
+    if (!agree) {
+      newErrors.agree = "You must agree to Terms and Conditions";
+      triggerShake(5);
     }
 
     setErrors(newErrors);
@@ -256,11 +290,11 @@ export default function AnimatedSignUpScreen() {
       return;
     }
 
-    // Pass phone number and fromSignUp flag to verification screen
-    router.push({
-      pathname: "/verification",
-      params: { phone: phone, fromSignUp: "true" },
-    });
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      router.push("/verification");
+    }, 1500);
   };
 
   return (
@@ -287,15 +321,26 @@ export default function AnimatedSignUpScreen() {
               },
             ]}
           >
-            <View style={styles.textContainer}>
-              <ShuffleText text="Create" delay={300} style={styles.heading} />
-              <ShuffleText text="Account" delay={600} style={styles.heading} />
-              <ShuffleText
-                text="Sign up to get started"
-                delay={1000}
-                style={styles.subtitle}
-              />
-            </View>
+            <LinearGradient
+              colors={["#0D4C4E", "#1E7C7E", "#3A9EA0"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.gradientHeader}
+            >
+              <View style={styles.textContainer}>
+                <ShuffleText text="Create" delay={300} style={styles.heading} />
+                <ShuffleText
+                  text="Account"
+                  delay={600}
+                  style={styles.heading}
+                />
+                <ShuffleText
+                  text="Sign up to get started"
+                  delay={1000}
+                  style={styles.subtitle}
+                />
+              </View>
+            </LinearGradient>
           </Animated.View>
 
           <Animated.View
@@ -313,6 +358,45 @@ export default function AnimatedSignUpScreen() {
               <View style={styles.inputContainer}>
                 <View style={styles.inputWrapper}>
                   <TextInput
+                    ref={emailInputRef}
+                    style={[
+                      styles.input,
+                      focusedInput === "email" && styles.inputFocused,
+                      errors.email && styles.inputError,
+                    ]}
+                    placeholder="Email Address"
+                    value={email}
+                    onChangeText={(text) => {
+                      setEmail(text);
+                      if (errors.email) setErrors({ ...errors, email: "" });
+                    }}
+                    onFocus={() => setFocusedInput("email")}
+                    onBlur={() => setFocusedInput(null)}
+                    placeholderTextColor="#8F8F8F"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    returnKeyType="next"
+                    onSubmitEditing={() => nameInputRef.current?.focus()}
+                  />
+                  <Ionicons
+                    name="mail-outline"
+                    size={20}
+                    color="#6B9A9C"
+                    style={styles.icon}
+                  />
+                </View>
+                {errors.email ? (
+                  <Text style={styles.errorText}>{errors.email}</Text>
+                ) : null}
+              </View>
+            </Animated.View>
+
+            <Animated.View
+              style={{ transform: [{ translateX: inputAnims[1] }] }}
+            >
+              <View style={styles.inputContainer}>
+                <View style={styles.inputWrapper}>
+                  <TextInput
                     ref={nameInputRef}
                     style={[
                       styles.input,
@@ -323,7 +407,7 @@ export default function AnimatedSignUpScreen() {
                     value={name}
                     onChangeText={(text) => {
                       setName(text);
-                      if (errors.name) setErrors({ ...errors, name: false });
+                      if (errors.name) setErrors({ ...errors, name: "" });
                     }}
                     onFocus={() => setFocusedInput("name")}
                     onBlur={() => setFocusedInput(null)}
@@ -339,11 +423,14 @@ export default function AnimatedSignUpScreen() {
                     style={styles.icon}
                   />
                 </View>
+                {errors.name ? (
+                  <Text style={styles.errorText}>{errors.name}</Text>
+                ) : null}
               </View>
             </Animated.View>
 
             <Animated.View
-              style={{ transform: [{ translateX: inputAnims[1] }] }}
+              style={{ transform: [{ translateX: inputAnims[2] }] }}
             >
               <View style={styles.inputContainer}>
                 <View style={styles.inputWrapper}>
@@ -358,7 +445,7 @@ export default function AnimatedSignUpScreen() {
                     value={phone}
                     onChangeText={(text) => {
                       handlePhoneChange(text);
-                      if (errors.phone) setErrors({ ...errors, phone: false });
+                      if (errors.phone) setErrors({ ...errors, phone: "" });
                     }}
                     onFocus={() => setFocusedInput("phone")}
                     onBlur={() => {
@@ -377,11 +464,14 @@ export default function AnimatedSignUpScreen() {
                     style={styles.icon}
                   />
                 </View>
+                {errors.phone ? (
+                  <Text style={styles.errorText}>{errors.phone}</Text>
+                ) : null}
               </View>
             </Animated.View>
 
             <Animated.View
-              style={{ transform: [{ translateX: inputAnims[2] }] }}
+              style={{ transform: [{ translateX: inputAnims[3] }] }}
             >
               <View style={styles.inputContainer}>
                 <View style={styles.passwordContainer}>
@@ -397,8 +487,16 @@ export default function AnimatedSignUpScreen() {
                     value={password}
                     onChangeText={(text) => {
                       setPassword(text);
-                      if (errors.password)
-                        setErrors({ ...errors, password: false });
+                      if (text.length > 0) {
+                        const passwordError = validatePassword(text);
+                        if (passwordError) {
+                          setErrors({ ...errors, password: passwordError });
+                        } else {
+                          setErrors({ ...errors, password: "" });
+                        }
+                      } else {
+                        setErrors({ ...errors, password: "" });
+                      }
                     }}
                     onFocus={() => setFocusedInput("password")}
                     onBlur={() => setFocusedInput(null)}
@@ -425,11 +523,14 @@ export default function AnimatedSignUpScreen() {
                     />
                   </TouchableOpacity>
                 </View>
+                {errors.password ? (
+                  <Text style={styles.errorText}>{errors.password}</Text>
+                ) : null}
               </View>
             </Animated.View>
 
             <Animated.View
-              style={{ transform: [{ translateX: inputAnims[3] }] }}
+              style={{ transform: [{ translateX: inputAnims[4] }] }}
             >
               <View style={styles.inputContainer}>
                 <View style={styles.passwordContainer}>
@@ -445,8 +546,14 @@ export default function AnimatedSignUpScreen() {
                     value={rePassword}
                     onChangeText={(text) => {
                       setRePassword(text);
-                      if (errors.rePassword)
-                        setErrors({ ...errors, rePassword: false });
+                      if (text.length > 0 && text !== password) {
+                        setErrors({
+                          ...errors,
+                          rePassword: "Passwords do not match",
+                        });
+                      } else {
+                        setErrors({ ...errors, rePassword: "" });
+                      }
                     }}
                     onFocus={() => setFocusedInput("rePassword")}
                     onBlur={() => setFocusedInput(null)}
@@ -473,26 +580,20 @@ export default function AnimatedSignUpScreen() {
                     />
                   </TouchableOpacity>
                 </View>
+                {errors.rePassword ? (
+                  <Text style={styles.errorText}>{errors.rePassword}</Text>
+                ) : null}
               </View>
             </Animated.View>
 
             <Animated.View
-              style={{ transform: [{ translateX: inputAnims[4] }] }}
+              style={{ transform: [{ translateX: inputAnims[5] }] }}
             >
               <TouchableOpacity
-                style={[
-                  styles.checkboxContainer,
-                  errors.agree && {
-                    borderColor: "#FF5252",
-                    borderWidth: 1,
-                    borderRadius: 10,
-                    padding: 5,
-                    backgroundColor: "#FFF8F8",
-                  },
-                ]}
+                style={styles.checkboxContainer}
                 onPress={() => {
                   setAgree(!agree);
-                  if (errors.agree) setErrors({ ...errors, agree: false });
+                  if (errors.agree) setErrors({ ...errors, agree: "" });
                 }}
                 activeOpacity={0.7}
               >
@@ -505,11 +606,14 @@ export default function AnimatedSignUpScreen() {
                   I agree to the Terms and Conditions
                 </Text>
               </TouchableOpacity>
+              {errors.agree ? (
+                <Text style={styles.errorText}>{errors.agree}</Text>
+              ) : null}
             </Animated.View>
 
             <Animated.View
               style={{
-                transform: [{ scale: inputAnims[5] }],
+                transform: [{ scale: inputAnims[6] }],
                 marginTop: 5,
               }}
             >
@@ -518,6 +622,7 @@ export default function AnimatedSignUpScreen() {
                 variant="primary"
                 onPress={handleSignUp}
                 style={styles.signupBtnCustom}
+                loading={isLoading}
               />
             </Animated.View>
 
@@ -563,17 +668,28 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   card: {
-    backgroundColor: "#1E7C7E",
+    backgroundColor: "transparent",
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
+    overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#1E7C7E",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 15,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  gradientHeader: {
     paddingHorizontal: 24,
-    paddingTop: 40,
-    paddingBottom: 20,
-    shadowColor: "#1E7C7E",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 10,
+    paddingTop: 50,
+    paddingBottom: 30,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   textContainer: {
     height: 100,
@@ -593,17 +709,23 @@ const styles = StyleSheet.create({
   form: {
     backgroundColor: "rgba(255, 255, 255, 0.9)",
     marginHorizontal: 20,
-    marginTop: 10,
+    marginTop: 20,
     borderRadius: 30,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
   },
   inputContainer: {
-    marginBottom: 12,
+    marginBottom: 15,
   },
   inputWrapper: {
     position: "relative",
@@ -611,7 +733,7 @@ const styles = StyleSheet.create({
   input: {
     backgroundColor: "#EAF6F7",
     borderRadius: 25,
-    paddingLeft: 45,
+    paddingLeft: 40,
     paddingRight: 20,
     height: 52,
     borderWidth: 1,
@@ -631,7 +753,7 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "#EAF6F7",
     borderRadius: 25,
-    paddingLeft: 45,
+    paddingLeft: 40,
     paddingRight: 50,
     height: 52,
     borderWidth: 1,
@@ -641,7 +763,7 @@ const styles = StyleSheet.create({
   },
   icon: {
     position: "absolute",
-    left: 16,
+    left: 12,
     top: 16,
     zIndex: 10,
   },
@@ -650,18 +772,22 @@ const styles = StyleSheet.create({
     right: 16,
     top: 16,
     zIndex: 999,
-    elevation: 5,
   },
   inputFocused: {
     borderColor: "#1E7C7E",
     borderWidth: 2,
   },
+  errorText: {
+    color: "#FF5252",
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 16,
+  },
   checkboxContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 15,
-    marginTop: 5,
-    paddingLeft: 0,
+    marginBottom: 10,
+    paddingLeft: 20,
   },
   checkbox: {
     width: 20,
@@ -702,17 +828,16 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   googleButton: {
-    marginBottom: 15,
-    height: 52,
-    borderRadius: 25,
+    marginBottom: 10,
   },
   footerText: {
     textAlign: "center",
     color: "#5A5A5A",
     fontSize: 14,
+    marginTop: 20,
   },
   footerLink: {
-    color: "#1E7C7E",
     fontWeight: "700",
+    color: "#1E7C7E",
   },
 });

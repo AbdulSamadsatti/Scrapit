@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import LottieView from "lottie-react-native";
-import { View, StyleSheet } from "react-native";
+import { View, Animated } from "react-native";
 
 const BURGER_JSON = {
   v: "5.6.5",
@@ -426,31 +426,30 @@ interface LottieHamburgerProps {
   size?: number;
 }
 
+const AnimatedLottieView = Animated.createAnimatedComponent(LottieView);
+
 const LottieHamburger: React.FC<LottieHamburgerProps> = ({
   isOpen,
   size = 32,
 }) => {
   const animationRef = useRef<LottieView>(null);
+  const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (isOpen) {
-      // Play forward (to cross/open state)
-      animationRef.current?.play(0, 20); // Stop at frame 20 for a cleaner open look if needed
-    } else {
-      // Play backward (to burger state)
-      animationRef.current?.play(20, 0);
-    }
-  }, [isOpen]);
+    Animated.timing(progress, {
+      toValue: isOpen ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [isOpen, progress]);
 
   return (
     <View style={{ width: size, height: size }}>
-      <LottieView
-        ref={animationRef}
+      <AnimatedLottieView
+        ref={animationRef as any}
         source={BURGER_JSON}
         style={{ width: "100%", height: "100%" }}
-        loop={false}
-        autoPlay={false}
-        speed={2.5} // Make it much snappier
+        progress={progress}
       />
     </View>
   );

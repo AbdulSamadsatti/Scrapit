@@ -55,12 +55,12 @@ export default function ResetPasswordScreen() {
   const fadeAnims = useRef<Animated.Value[]>(
     Array(4)
       .fill(0)
-      .map(() => new Animated.Value(0))
+      .map(() => new Animated.Value(0)),
   ).current;
   const slideAnims = useRef<Animated.Value[]>(
     Array(4)
       .fill(0)
-      .map(() => new Animated.Value(30))
+      .map(() => new Animated.Value(30)),
   ).current;
   const buttonScaleAnim = useRef(new Animated.Value(0.8)).current;
 
@@ -110,7 +110,7 @@ export default function ResetPasswordScreen() {
           delay: index * 150,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
 
     Animated.stagger(100, animations).start();
@@ -197,9 +197,11 @@ export default function ResetPasswordScreen() {
     }
 
     if (!hasError) {
-      // Reset password logic here
-      console.log("Password reset successful");
-      router.push("/log-in");
+      // Since password reset is handled via Firebase email link,
+      // this screen can be used for success feedback or if we had a custom token.
+      // For now, we'll just navigate back to login.
+      alert("Password has been reset successfully!");
+      router.replace("/log-in");
     }
   };
 

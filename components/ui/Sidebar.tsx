@@ -1,28 +1,34 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useRouter } from "expo-router";
 import {
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
   Animated,
   Platform,
-  StatusBar,
 } from "react-native";
 import {
   ChevronDown,
   LayoutGrid,
-  Heart,
   MessageSquare,
+  Bell,
+  Heart,
   User,
-  Settings,
   LogOut,
+  ShoppingCart,
   X,
 } from "lucide-react-native";
 import LottieHamburger from "./Hamburger";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+interface SidebarItemData {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  type: "page" | "submenu";
+  children?: { id: string; label: string }[];
+}
 
 const SIDEBAR_ITEMS: SidebarItemData[] = [
   {
@@ -40,15 +46,31 @@ const SIDEBAR_ITEMS: SidebarItemData[] = [
     ],
   },
   {
+    id: "communication",
+    label: "Communication",
+    icon: MessageSquare,
+    type: "submenu",
+    children: [
+      { id: "comm-chat", label: "Chat" },
+      { id: "comm-support", label: "Support" },
+    ],
+  },
+  {
+    id: "notifications",
+    label: "Notifications",
+    icon: Bell,
+    type: "page",
+  },
+  {
     id: "favourites",
     label: "Favourites",
     icon: Heart,
     type: "page",
   },
   {
-    id: "chat",
-    label: "Chat",
-    icon: MessageSquare,
+    id: "cart",
+    label: "Cart",
+    icon: ShoppingCart,
     type: "page",
   },
   {
@@ -59,18 +81,10 @@ const SIDEBAR_ITEMS: SidebarItemData[] = [
     children: [
       { id: "acc-profile", label: "Profile" },
       { id: "acc-edit", label: "Edit Profile" },
-      { id: "acc-security", label: "Security (password, email)" },
+      { id: "acc-security", label: "Security" },
     ],
   },
 ];
-
-interface SidebarItemData {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  type: "page" | "submenu";
-  children?: { id: string; label: string }[];
-}
 
 interface SubmenuProps {
   isOpen: boolean;
@@ -93,7 +107,7 @@ const Submenu: React.FC<SubmenuProps> = ({
       duration: 300,
       useNativeDriver: false,
     }).start();
-  }, [isOpen]);
+  }, [isOpen, animatedHeight, items.length]);
 
   return (
     <Animated.View
@@ -184,6 +198,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isVisible, onClose }) => {
+  const router = useRouter();
   const [activeItem, setActiveItem] = useState<string | null>(null);
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const slideAnim = useRef(new Animated.Value(-280)).current;
@@ -217,11 +232,95 @@ export const Sidebar: React.FC<SidebarProps> = ({ isVisible, onClose }) => {
         }),
       ]).start();
     }
-  }, [isVisible]);
+  }, [isVisible, opacityAnim, slideAnim]);
 
   const handlePageClick = (id: string) => {
     setActiveItem(id);
-    // onClose(); // Close on click for mobile UX
+
+    // Handle category navigation
+    if (id.startsWith("cat-")) {
+      const category = id.replace("cat-", "");
+      // Convert ID to match the route params if needed (e.g., ecommerce -> E-Commerce)
+      let categoryParam = category.charAt(0).toUpperCase() + category.slice(1);
+      if (category === "ecommerce") categoryParam = "E-Commerce";
+
+      router.push({
+        pathname: "/category-details",
+        params: { category: categoryParam },
+      });
+      onClose();
+      return;
+    }
+
+    // Map menu items to settings tabs
+    let tab = "account";
+    let isSupport = false;
+
+    switch (id) {
+      case "acc-profile":
+      case "acc-edit":
+        tab = "account";
+        break;
+      case "acc-security":
+        tab = "privacy";
+        break;
+      case "notifications":
+        tab = "notifications";
+        break;
+      case "comm-chat":
+        router.push("/chatbot");
+        onClose();
+        return;
+      case "comm-support":
+        isSupport = true;
+        break;
+      default:
+        tab = "account";
+    }
+
+    // Navigate to support page if support is clicked
+    if (isSupport) {
+      // For now, let's use settings as support page until we create a dedicated support page
+      router.push({
+        pathname: "/settings",
+        params: { tab: "help" },
+      });
+      onClose();
+      return;
+    }
+
+    // Navigate to settings with the appropriate tab parameter
+    if (id.startsWith("acc-") || id === "notifications") {
+      router.push({
+        pathname: "/settings",
+        params: { tab },
+      });
+      onClose();
+      return;
+    }
+
+    if (id === "comm-chat") {
+      router.push("/chatbot");
+      onClose();
+      return;
+    }
+
+    if (id === "favourites") {
+      router.push("/liked");
+      onClose();
+      return;
+    }
+
+    if (id === "cart") {
+      router.push("/cart");
+      onClose();
+      return;
+    }
+
+    if (id === "logout") {
+      alert("Logout coming soon!");
+      onClose();
+    }
   };
 
   const handleSubmenuToggle = (id: string) => {
@@ -279,14 +378,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isVisible, onClose }) => {
         <View style={styles.footer}>
           <TouchableOpacity
             style={styles.footerItem}
-            onPress={() => handlePageClick("settings")}
-          >
-            <Settings size={18} color="rgba(255, 255, 255, 0.7)" />
-            <Text style={styles.footerText}>Settings</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.footerItem}
             onPress={() => handlePageClick("logout")}
           >
             <LogOut size={18} color="#FF5A5A" />
@@ -339,13 +430,13 @@ const styles = StyleSheet.create({
     }),
   },
   header: {
-    height: 80,
+    height: 100, // Increased height
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255, 255, 255, 0.08)",
-    paddingTop: Platform.OS === "ios" ? 20 : 0,
+    paddingTop: Platform.OS === "ios" ? 40 : 20, // Increased paddingTop
   },
   headerContent: {
     flexDirection: "row",

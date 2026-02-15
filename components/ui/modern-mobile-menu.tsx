@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -7,13 +7,14 @@ import {
   Dimensions,
   Platform,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import {
   Home,
   ShoppingCart,
   Heart,
   MessageSquare,
-  User,
+  Settings,
 } from "lucide-react-native";
 import Animated, {
   useAnimatedStyle,
@@ -21,12 +22,14 @@ import Animated, {
   withTiming,
   useSharedValue,
 } from "react-native-reanimated";
+import { usePathname } from "expo-router";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export interface InteractiveMenuItem {
   label: string;
   icon: React.ElementType;
+  path: string;
 }
 
 export interface InteractiveMenuProps {
@@ -36,11 +39,11 @@ export interface InteractiveMenuProps {
 }
 
 const defaultItems: InteractiveMenuItem[] = [
-  { label: "home", icon: Home },
-  { label: "cart", icon: ShoppingCart },
-  { label: "chatbot", icon: MessageSquare },
-  { label: "liked", icon: Heart },
-  { label: "profile", icon: User },
+  { label: "home", icon: Home, path: "/home" },
+  { label: "cart", icon: ShoppingCart, path: "/cart" },
+  { label: "chatbot", icon: MessageSquare, path: "/chatbot" },
+  { label: "liked", icon: Heart, path: "/liked" },
+  { label: "settings", icon: Settings, path: "/settings" },
 ];
 
 const DEFAULT_ACCENT = "#FFFFFF"; // White for active items on dark background
@@ -51,6 +54,8 @@ const InteractiveMenu: React.FC<InteractiveMenuProps> = ({
   accentColor = DEFAULT_ACCENT,
   onItemPress,
 }) => {
+  const pathname = usePathname();
+
   const finalItems = useMemo(() => {
     const isValid =
       items && Array.isArray(items) && items.length >= 2 && items.length <= 5;
@@ -60,7 +65,17 @@ const InteractiveMenu: React.FC<InteractiveMenuProps> = ({
     return items;
   }, [items]);
 
-  const [activeIndex, setActiveIndex] = useState(0);
+  const getActiveIndexFromPath = useCallback(() => {
+    const index = finalItems.findIndex((item) => pathname === item.path);
+    return index === -1 ? 0 : index;
+  }, [finalItems, pathname]);
+
+  const [activeIndex, setActiveIndex] = useState(getActiveIndexFromPath());
+
+  useEffect(() => {
+    // Update active index when route changes
+    setActiveIndex(getActiveIndexFromPath());
+  }, [getActiveIndexFromPath]);
 
   const handleItemClick = (index: number) => {
     if (index !== activeIndex) {
@@ -72,7 +87,12 @@ const InteractiveMenu: React.FC<InteractiveMenuProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={[styles.menu]}>
+      <LinearGradient
+        colors={["#063537", "#0D5A5B", "#1E7C7E"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.menu}
+      >
         {finalItems.map((item, index) => (
           <MenuItem
             key={item.label}
@@ -82,7 +102,7 @@ const InteractiveMenu: React.FC<InteractiveMenuProps> = ({
             accentColor={accentColor}
           />
         ))}
-      </View>
+      </LinearGradient>
     </View>
   );
 };
@@ -194,7 +214,6 @@ const styles = StyleSheet.create({
   },
   menu: {
     flexDirection: "row",
-    backgroundColor: "#1E7C7E", // Dark Teal Background
     paddingHorizontal: 10,
     paddingTop: 8,
     paddingBottom: Platform.OS === "ios" ? 25 : 12,

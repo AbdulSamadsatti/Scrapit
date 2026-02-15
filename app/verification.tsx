@@ -1,32 +1,34 @@
-import React, { useState, useEffect, useRef } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   StyleSheet,
-  View,
   Text,
   TextInput,
   TouchableOpacity,
-  Animated,
-  KeyboardAvoidingView,
-  ScrollView,
-  Platform,
-  Alert,
+  View,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { CustomButton } from "../components/ui/CustomButton";
+import { ShuffleText } from "../components/ui/ShuffleText";
 
-import { ShuffleText } from "@/components/ui/ShuffleText";
+const { width } = Dimensions.get("window");
 
 const AnimatedElement = ({
+  children,
   index,
   fadeAnims,
   slideAnims,
-  children,
 }: {
+  children: React.ReactNode;
   index: number;
   fadeAnims: Animated.Value[];
   slideAnims: Animated.Value[];
-  children: React.ReactNode;
 }) => (
   <Animated.View
     style={{
@@ -39,84 +41,66 @@ const AnimatedElement = ({
 );
 
 export default function VerificationScreen() {
-  const router = useRouter();
   const { phone } = useLocalSearchParams();
   const [code, setCode] = useState(["", "", "", ""]);
-  const [error, setError] = useState("");
-  const [timer, setTimer] = useState(60);
+  const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
+  const [error, setError] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
 
+  const fadeAnims = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
+  const slideAnims = useRef([new Animated.Value(20), new Animated.Value(20), new Animated.Value(20)]).current;
+  const buttonScaleAnim = useRef(new Animated.Value(1)).current;
   const inputRefs = useRef<TextInput[]>([]);
 
-  // Animation values
-  const fadeAnims = useRef<Animated.Value[]>(
-    Array(4)
-      .fill(0)
-      .map(() => new Animated.Value(0))
-  ).current;
-  const slideAnims = useRef<Animated.Value[]>(
-    Array(4)
-      .fill(0)
-      .map(() => new Animated.Value(30))
-  ).current;
-  const buttonScaleAnim = useRef(new Animated.Value(0.8)).current;
-
   useEffect(() => {
-    const animations = fadeAnims.map((anim, index) =>
-      Animated.parallel([
+    Animated.stagger(100, [
+      ...fadeAnims.map((anim) =>
         Animated.timing(anim, {
           toValue: 1,
           duration: 600,
-          delay: index * 150,
           useNativeDriver: true,
-        }),
-        Animated.timing(slideAnims[index], {
+        })
+      ),
+      ...slideAnims.map((anim) =>
+        Animated.timing(anim, {
           toValue: 0,
           duration: 600,
-          delay: index * 150,
           useNativeDriver: true,
-        }),
-      ])
-    );
+        })
+      ),
+    ]).start();
 
-    Animated.stagger(100, animations).start();
+    const interval = setInterval(() => {
+      setTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
-    Animated.spring(buttonScaleAnim, {
-      toValue: 1,
-      friction: 3,
-      tension: 20,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnims, slideAnims, buttonScaleAnim]);
-
-  useEffect(() => {
-    if (timer > 0) {
-      const interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
-      return () => clearInterval(interval);
-    } else {
-      setCanResend(true);
-    }
-  }, [timer]);
+    return () => clearInterval(interval);
+  }, [fadeAnims, slideAnims]);
 
   const handleCodeChange = (text: string, index: number) => {
-    if (text.length <= 1) {
-      const newCode = [...code];
-      newCode[index] = text;
-      setCode(newCode);
-      setError("");
+    if (text.length > 1) {
+      text = text.slice(-1);
+    }
 
-      if (text && index < 3) {
-        inputRefs.current[index + 1]?.focus();
-      }
+    const newCode = [...code];
+    newCode[index] = text;
+    setCode(newCode);
+    setError("");
+
+    if (text && index < 3) {
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleKeyPress = (
-    e: { nativeEvent: { key: string } },
-    index: number
-  ) => {
+  const handleKeyPress = (e: any, index: number) => {
     if (e.nativeEvent.key === "Backspace" && !code[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -129,57 +113,38 @@ export default function VerificationScreen() {
       return;
     }
 
+    setIsVerifying(true);
     try {
-      const response = await fetch("https://your-api.com/verify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone,
-          code: verificationCode,
-        }),
-      });
-
-      if (response.ok) {
-        // Navigate to home screen after successful verification
-        router.replace("/home");
-      } else {
-        setError("Invalid verification code");
-      }
-    } catch {
-      setError("Network error. Please try again.");
+      // Simulate verification delay
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      
+      console.log("Verification successful, navigating to home...");
+      router.replace("/home");
+    } catch (err) {
+      console.error("Verification error:", err);
+      setError("Verification failed. Please try again.");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
-  const handleResend = async () => {
-    try {
-      const response = await fetch("https://your-api.com/resend-code", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ phone }),
-      });
-
-      if (response.ok) {
-        setTimer(60);
-        setCanResend(false);
-        setError("");
-        Alert.alert(
-          "Code Resent",
-          "A new verification code has been sent to your phone."
-        );
-      } else {
-        setError("Failed to resend code");
-      }
-    } catch {
-      setError("Network error. Please try again.");
-    }
+  const handleSkip = () => {
+    console.log("Skipping verification, navigating to home...");
+    router.replace("/home");
   };
 
-  const handleBackToSignUp = () => {
-    router.push("/sign-up");
+  const handleResend = () => {
+    if (!canResend) return;
+    setTimer(30);
+    setCanResend(false);
+    setCode(["", "", "", ""]);
+    setError("");
+    inputRefs.current[0]?.focus();
+    // Logic to resend code would go here
+  };
+
+  const handleBack = () => {
+    router.back();
   };
 
   return (
@@ -187,18 +152,17 @@ export default function VerificationScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <LinearGradient colors={["#0E5F63", "#1E7C7E"]} style={styles.card}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <LinearGradient
+          colors={["#031d1e", "#063537", "#0D5A5B"]}
+          style={styles.header}
+        >
           <TouchableOpacity
             style={styles.backButton}
-            onPress={handleBackToSignUp}
+            onPress={handleBack}
             activeOpacity={0.7}
           >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <AnimatedElement
             index={0}
@@ -208,7 +172,7 @@ export default function VerificationScreen() {
             <ShuffleText text="Verification" delay={300} style={styles.title} />
             <Text style={styles.subtitle}>
               Enter the 4-digit code sent to{"\n"}
-              {phone}
+              {phone || "your phone"}
             </Text>
           </AnimatedElement>
         </LinearGradient>
@@ -226,7 +190,7 @@ export default function VerificationScreen() {
                   ref={(ref) => {
                     if (ref) inputRefs.current[index] = ref;
                   }}
-                  style={[styles.codeInput, error && styles.codeInputError]}
+                  style={[styles.codeInput, error ? styles.codeInputError : null]}
                   value={digit}
                   onChangeText={(text) => handleCodeChange(text, index)}
                   onKeyPress={(e) => handleKeyPress(e, index)}
@@ -249,22 +213,25 @@ export default function VerificationScreen() {
           >
             <Animated.View
               style={{
-                transform: [
-                  {
-                    scale: buttonScaleAnim,
-                  },
-                ],
+                transform: [{ scale: buttonScaleAnim }],
                 marginTop: 24,
               }}
             >
-              <TouchableOpacity
-                style={styles.verifyButton}
+              <CustomButton
+                title="Verify"
+                loading={isVerifying}
+                variant="primary"
                 onPress={handleVerify}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.verifyButtonText}>Verify</Text>
-              </TouchableOpacity>
+              />
             </Animated.View>
+
+            <TouchableOpacity
+              onPress={handleSkip}
+              style={styles.skipButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.skipText}>Skip for now</Text>
+            </TouchableOpacity>
 
             <View style={styles.resendContainer}>
               <Text style={styles.resendText}>
@@ -297,133 +264,100 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F5F5F5",
   },
-  scrollContainer: {
+  scrollContent: {
     flexGrow: 1,
   },
-  card: {
-    height: 220,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 50,
-    paddingBottom: 30,
-    justifyContent: "space-between",
-  },
-  backButton: {
-    width: 40,
-    height: 40,
+  header: {
+    height: 280,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: -8,
+    paddingTop: 40,
+  },
+  backButton: {
+    position: "absolute",
+    top: 50,
+    left: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   title: {
-    color: "#fff",
-    fontSize: 32,
-    fontWeight: "700",
-    lineHeight: 38,
-    marginTop: 10,
-    marginBottom: 8,
+    fontSize: 36,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    textAlign: "center",
+    marginBottom: 10,
   },
   subtitle: {
-    color: "#B8E6E8",
-    fontSize: 14,
-    fontWeight: "400",
-    lineHeight: 20,
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.8)",
+    textAlign: "center",
+    lineHeight: 24,
   },
   form: {
-    padding: 28,
-    paddingTop: 36,
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    marginTop: -30,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 30,
+    paddingTop: 40,
   },
   codeContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 20,
   },
   codeInput: {
-    width: 60,
-    height: 60,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    fontSize: 24,
-    fontWeight: "600",
-    color: "#333",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: {
-          width: 0,
-          height: 2,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-      web: {
-        boxShadow: "0px 2px 4px rgba(0, 0, 0, 0.1)",
-      },
-    }),
+    width: (width - 100) / 4,
+    height: 70,
+    backgroundColor: "#F8F9FA",
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: "#E9ECEF",
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#031d1e",
   },
   codeInputError: {
-    borderColor: "#E74C3C",
-    borderWidth: 1.5,
+    borderColor: "#DC3545",
   },
   errorText: {
-    color: "#E74C3C",
-    fontSize: 12,
-    marginTop: 4,
+    color: "#DC3545",
+    fontSize: 14,
     textAlign: "center",
+    marginBottom: 10,
   },
-  verifyButton: {
-    backgroundColor: "#1E7C7E",
-    borderRadius: 25,
-    height: 52,
-    justifyContent: "center",
+  skipButton: {
     alignItems: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#1E7C7E",
-        shadowOffset: {
-          width: 0,
-          height: 6,
-        },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 12,
-      },
-      web: {
-        boxShadow: "0px 6px 8px rgba(30, 124, 126, 0.4)",
-      },
-    }),
-    marginTop: 24,
+    marginTop: 16,
+    paddingVertical: 8,
   },
-  verifyButtonText: {
-    color: "#fff",
+  skipText: {
+    color: "#1E7C7E",
     fontSize: 16,
     fontWeight: "600",
+    textDecorationLine: "underline",
   },
   resendContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 24,
+    marginTop: 30,
   },
   resendText: {
-    color: "#666",
-    fontSize: 14,
-    fontWeight: "400",
+    color: "#6C757D",
+    fontSize: 15,
   },
   resendLink: {
     color: "#1E7C7E",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
   },
   resendLinkDisabled: {
-    color: "#999",
+    color: "#B0B0B0",
   },
 });

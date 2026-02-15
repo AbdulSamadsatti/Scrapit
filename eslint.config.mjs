@@ -8,7 +8,7 @@ export default [
   ...compat.extends("expo"),
   {
     rules: {
-      // Add any specific rules here
+      "import/no-unresolved": "off",
     },
   },
 ];

@@ -40,7 +40,7 @@ export default function CinematicSplash() {
             duration: 4000,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
 
       Animated.loop(
@@ -48,7 +48,7 @@ export default function CinematicSplash() {
           toValue: 1,
           duration: 10000,
           useNativeDriver: true,
-        })
+        }),
       ).start();
 
       // Rotate ring 2 (reverse)
@@ -57,7 +57,7 @@ export default function CinematicSplash() {
           toValue: 1,
           duration: 15000,
           useNativeDriver: true,
-        })
+        }),
       ).start();
 
       // Breathe animation
@@ -73,7 +73,7 @@ export default function CinematicSplash() {
             duration: 2000,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       ).start();
 
       // Title entrance

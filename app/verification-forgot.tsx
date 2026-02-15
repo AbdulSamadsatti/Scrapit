@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { ShuffleText } from "@/components/ui/ShuffleText";
+import { CustomButton } from "@/components/ui/CustomButton";
 
 const AnimatedElement = ({
   index,
@@ -53,12 +54,12 @@ export default function VerificationForgotScreen() {
   const fadeAnims = useRef<Animated.Value[]>(
     Array(4)
       .fill(0)
-      .map(() => new Animated.Value(0))
+      .map(() => new Animated.Value(0)),
   ).current;
   const slideAnims = useRef<Animated.Value[]>(
     Array(4)
       .fill(0)
-      .map(() => new Animated.Value(30))
+      .map(() => new Animated.Value(30)),
   ).current;
   const buttonScaleAnim = useRef(new Animated.Value(0.8)).current;
 
@@ -107,7 +108,7 @@ export default function VerificationForgotScreen() {
           delay: index * 150,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
 
     Animated.stagger(100, animations).start();
@@ -189,31 +190,30 @@ export default function VerificationForgotScreen() {
 
   const handleKeyPress = (
     e: { nativeEvent: { key: string } },
-    index: number
+    index: number,
   ) => {
     if (e.nativeEvent.key === "Backspace" && !code[index] && index > 0) {
       inputs.current[index - 1]?.focus();
     }
   };
 
-  const handleVerify = () => {
-    const fullCode = code.join("");
-    if (fullCode.length !== 4) {
+  const handleVerify = async () => {
+    const verificationCode = code.join("");
+    if (verificationCode.length !== 4) {
       setError("Please enter a 4-digit code");
       return;
     }
 
-    router.push({
-      pathname: "/reset-password",
-      params: { phone, code: fullCode },
-    });
+    // Simulate verification for forgot password
+    // In a real scenario, you'd check this code against your backend
+    router.push("/reset-password");
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     setTimer(60);
     setCanResend(false);
     setError("");
-    console.log("Resend code");
+    // alert("Code Resent");
   };
 
   return (
@@ -339,13 +339,11 @@ export default function VerificationForgotScreen() {
                 ],
               }}
             >
-              <TouchableOpacity
-                style={styles.loginBtn}
+              <CustomButton
+                title="Verify Code"
+                variant="primary"
                 onPress={handleVerify}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loginBtnText}>Verify Code</Text>
-              </TouchableOpacity>
+              />
             </Animated.View>
           </AnimatedElement>
 
@@ -473,32 +471,7 @@ const styles = StyleSheet.create({
     color: "rgba(30, 124, 126, 0.5)",
     textDecorationLine: "none",
   },
-  loginBtn: {
-    backgroundColor: "#1E7C7E",
-    borderRadius: 25,
-    height: 52,
-    justifyContent: "center",
-    alignItems: "center",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#1E7C7E",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
-      },
-      android: {
-        elevation: 8,
-      },
-      web: {
-        boxShadow: "0px 4px 5px rgba(30, 124, 126, 0.3)",
-      },
-    }),
-  },
-  loginBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 17,
-  },
+
   backButton: {
     marginTop: 24,
     alignItems: "center",

@@ -12,19 +12,22 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { CustomButton } from "@/components/ui/CustomButton";
 
 import { ShuffleText } from "@/components/ui/ShuffleText";
 
 export default function AnimatedLoginScreen() {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState("+92 ");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [phoneError, setPhoneError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [agreeError, setAgreeError] = useState("");
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Animation values
   const cardScale = useRef(new Animated.Value(0.9)).current;
@@ -116,11 +119,19 @@ export default function AnimatedLoginScreen() {
     inputAnims,
   ]);
 
-  const validatePassword = (pass: string) => {
-    // Strong password logic
-    const strongRegex =
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    return strongRegex.test(pass);
+  const validatePassword = (pass: string): string => {
+    if (pass.length < 8) {
+      return "Password must be at least 8 characters";
+    } else if (!/[a-z]/.test(pass)) {
+      return "Password must contain lowercase letter";
+    } else if (!/[A-Z]/.test(pass)) {
+      return "Password must contain uppercase letter";
+    } else if (!/\d/.test(pass)) {
+      return "Password must contain number";
+    } else if (!/[@$!%*?&]/.test(pass)) {
+      return "Password must contain special character";
+    }
+    return "";
   };
 
   const triggerShake = (index: number) => {
@@ -169,25 +180,21 @@ export default function AnimatedLoginScreen() {
     // REAL-TIME INVALID INPUT CHECK:
     // Pakistani mobile numbers MUST start with '3'
     if (digits.length > 0 && digits[0] !== "3") {
-      setPhoneError("Invalid Pakistani mobile number");
-    } else if (
-      digits.length === 0 ||
-      (digits.length > 0 && digits[0] === "3")
-    ) {
-      if (
-        phoneError === "Invalid Pakistani mobile number" ||
-        digits.length === 10
-      ) {
-        setPhoneError("");
-      }
+      setPhoneError("Invalid Pakistani mobile number - must start with 3");
+      triggerShake(0);
+    } else {
+      setPhoneError("");
     }
   };
 
   const handlePhoneBlur = () => {
     const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length > 0) {
-      if (cleanPhone.length !== 12 || cleanPhone[2] !== "3") {
-        setPhoneError("Invalid Pakistani phone number");
+    if (cleanPhone.length > 0 && cleanPhone !== "92") {
+      if (cleanPhone.length !== 12) {
+        setPhoneError("Invalid phone number format");
+        triggerShake(0);
+      } else if (cleanPhone[2] !== "3") {
+        setPhoneError("Invalid mobile number: Must start with 3");
         triggerShake(0);
       } else {
         setPhoneError("");
@@ -196,9 +203,14 @@ export default function AnimatedLoginScreen() {
   };
 
   const handlePasswordBlur = () => {
-    if (password.length > 0 && !validatePassword(password)) {
-      setPasswordError("Strong password is required");
-      triggerShake(1);
+    if (password.length > 0) {
+      const error = validatePassword(password);
+      if (error) {
+        setPasswordError(error);
+        triggerShake(1);
+      } else {
+        setPasswordError("");
+      }
     } else {
       setPasswordError("");
     }
@@ -207,25 +219,45 @@ export default function AnimatedLoginScreen() {
   const handleLogin = () => {
     setPhoneError("");
     setPasswordError("");
+    setAgreeError("");
     let hasError = false;
 
     const cleanPhone = phone.replace(/\D/g, "");
-    if (!phone || cleanPhone.length !== 12 || cleanPhone[2] !== "3") {
-      setPhoneError("Valid Pakistani phone number is required");
+    if (!phone || cleanPhone.length === 0) {
+      setPhoneError("Phone number is required");
+      triggerShake(0);
+      hasError = true;
+    } else if (cleanPhone.length !== 12) {
+      setPhoneError("Invalid phone number format");
+      triggerShake(0);
+      hasError = true;
+    } else if (cleanPhone[2] !== "3") {
+      setPhoneError("Invalid mobile number: Must start with 3");
       triggerShake(0);
       hasError = true;
     }
 
-    if (!validatePassword(password)) {
-      setPasswordError(
-        "Strong password is required (8+ chars, uppercase, number, special char)"
-      );
+    const passError = validatePassword(password);
+    if (passError) {
+      setPasswordError(passError);
       triggerShake(1);
       hasError = true;
     }
 
+    if (!rememberMe) {
+      setAgreeError("You must agree to Terms and Conditions");
+      triggerShake(2);
+      hasError = true;
+    }
+
     if (hasError) return;
-    router.push("/home");
+
+    // Simulate loading
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      router.push("/home");
+    }, 1500);
   };
 
   return (
@@ -248,15 +280,26 @@ export default function AnimatedLoginScreen() {
             },
           ]}
         >
-          <View style={styles.textContainer}>
-            <ShuffleText text="Hey," delay={300} style={styles.greeting} />
-            <ShuffleText
-              text="Welcome"
-              delay={600}
-              style={styles.welcomeText}
-            />
-            <ShuffleText text="back" delay={1000} style={styles.welcomeText} />
-          </View>
+          <LinearGradient
+            colors={["#0D4C4E", "#1E7C7E", "#3A9EA0"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gradientHeader}
+          >
+            <View style={styles.textContainer}>
+              <ShuffleText text="Hey," delay={300} style={styles.greeting} />
+              <ShuffleText
+                text="Welcome"
+                delay={600}
+                style={styles.welcomeText}
+              />
+              <ShuffleText
+                text="back"
+                delay={1000}
+                style={styles.welcomeText}
+              />
+            </View>
+          </LinearGradient>
         </Animated.View>
 
         {/* Form Container */}
@@ -275,7 +318,7 @@ export default function AnimatedLoginScreen() {
               styles.inputWrapper,
               {
                 transform: [{ translateX: inputAnims[0] }],
-                marginBottom: 15,
+                marginBottom: phoneError ? 5 : 15,
               },
             ]}
           >
@@ -304,6 +347,9 @@ export default function AnimatedLoginScreen() {
               maxLength={14}
             />
           </Animated.View>
+          {phoneError ? (
+            <Text style={styles.errorText}>{phoneError}</Text>
+          ) : null}
 
           {/* Password Input */}
           <Animated.View
@@ -311,7 +357,8 @@ export default function AnimatedLoginScreen() {
               styles.inputWrapper,
               {
                 transform: [{ translateX: inputAnims[1] }],
-                marginBottom: 15,
+                marginTop: phoneError ? 10 : 0,
+                marginBottom: passwordError ? 5 : 15,
               },
             ]}
           >
@@ -355,6 +402,9 @@ export default function AnimatedLoginScreen() {
               />
             </TouchableOpacity>
           </Animated.View>
+          {passwordError ? (
+            <Text style={styles.errorText}>{passwordError}</Text>
+          ) : null}
 
           {/* Checkbox */}
           <Animated.View
@@ -362,14 +412,22 @@ export default function AnimatedLoginScreen() {
               styles.checkboxRow,
               {
                 transform: [{ translateX: inputAnims[2] }],
-                marginTop: 5,
-                marginBottom: 20,
+                marginTop: passwordError ? 10 : 5,
+                marginBottom: agreeError ? 5 : 20,
+                paddingLeft: 20,
               },
             ]}
           >
             <TouchableOpacity
-              style={[styles.checkbox, rememberMe && styles.checked]}
-              onPress={() => setRememberMe(!rememberMe)}
+              style={[
+                styles.checkbox,
+                rememberMe && styles.checked,
+                agreeError ? styles.checkboxError : null,
+              ]}
+              onPress={() => {
+                setRememberMe(!rememberMe);
+                if (agreeError) setAgreeError("");
+              }}
               activeOpacity={0.7}
             >
               {rememberMe && (
@@ -377,14 +435,22 @@ export default function AnimatedLoginScreen() {
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => setRememberMe(!rememberMe)}
+              onPress={() => {
+                setRememberMe(!rememberMe);
+                if (agreeError) setAgreeError("");
+              }}
               activeOpacity={0.7}
             >
               <Text style={styles.rememberText}>
-                I agree to the Terms & Privacy
+                I agree to the Terms and Conditions
               </Text>
             </TouchableOpacity>
           </Animated.View>
+          {agreeError ? (
+            <Text style={[styles.errorText, { marginBottom: 15 }]}>
+              {agreeError}
+            </Text>
+          ) : null}
 
           {/* Login Button */}
           <Animated.View
@@ -398,6 +464,7 @@ export default function AnimatedLoginScreen() {
               variant="primary"
               onPress={handleLogin}
               style={styles.loginBtnCustom}
+              loading={isLoading}
             />
           </Animated.View>
 
@@ -452,12 +519,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   topCard: {
-    backgroundColor: "#1E7C7E",
+    backgroundColor: "#0D4C4E",
     borderBottomLeftRadius: 32,
     borderBottomRightRadius: 32,
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
+    overflow: "hidden",
     ...Platform.select({
       ios: {
         shadowColor: "#1E7C7E",
@@ -472,6 +537,11 @@ const styles = StyleSheet.create({
         boxShadow: "0px 10px 15px rgba(30, 124, 126, 0.3)",
       },
     }),
+  },
+  gradientHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
   },
   textContainer: {
     height: 140,
@@ -580,6 +650,9 @@ const styles = StyleSheet.create({
   checked: {
     backgroundColor: "#1E7C7E",
     borderColor: "#1E7C7E",
+  },
+  checkboxError: {
+    borderColor: "#E74C3C",
   },
   rememberText: {
     fontSize: 14,

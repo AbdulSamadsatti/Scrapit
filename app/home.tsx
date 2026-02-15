@@ -1,31 +1,33 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
+import { useRouter } from "expo-router";
 import {
   StyleSheet,
   View,
   Text,
-  TouchableOpacity,
   Image,
+  TouchableOpacity,
   Dimensions,
   Animated,
   FlatList,
   Platform,
   StatusBar,
 } from "react-native";
-import { Sidebar } from "../components/ui/Sidebar";
-import Carousel3D from "../components/ui/animated Carousels";
-import LottieHamburger from "../components/ui/Hamburger";
+import { Sidebar } from "@/components/ui/Sidebar";
+import Carousel3D from "@/components/ui/animated Carousels";
+import LottieHamburger from "@/components/ui/Hamburger";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { InteractiveMenu } from "../components/ui/modern-mobile-menu";
-import InfinityLoader from "../components/ui/InfinityLoader";
-import { SearchBar } from "../components/ui/search-bar";
+import { InteractiveMenu } from "@/components/ui/modern-mobile-menu";
+import InfinityLoader from "@/components/ui/InfinityLoader";
+import { SearchBar } from "@/components/ui/search-bar";
+import { LinearGradient } from "expo-linear-gradient";
+import { useCart } from "@/contexts/CartContext";
 import {
   Home,
   ShoppingCart,
-  User,
   MessageSquare,
   Heart,
-  Menu,
+  Settings,
 } from "lucide-react-native";
 
 const { width } = Dimensions.get("window");
@@ -79,28 +81,28 @@ const TRENDING_ITEMS = [
   {
     id: "1",
     title: "Mac Laptop",
-    price: "$ 1,234.56",
+    price: "Rs 234,560",
     image:
       "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=400&auto=format&fit=crop",
   },
   {
     id: "2",
     title: "Honda Civic",
-    price: "$ 1,234.56",
+    price: "Rs 3,234,560",
     image:
       "https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?q=80&w=400&auto=format&fit=crop",
   },
   {
     id: "3",
     title: "Nathia Gali",
-    price: "$ 1,234.56",
+    price: "Rs 12,345",
     image:
       "https://images.unsplash.com/photo-1591817505018-a9ba98f8f450?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MXx8bmF0aGlhZ2FsbGl8ZW58MHx8MHx8fDA%3D",
   },
   {
     id: "4",
     title: "IT Job",
-    price: "$ 1,234.56",
+    price: "Rs 85,000",
     image:
       "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?q=80&w=400&auto=format&fit=crop",
   },
@@ -158,24 +160,80 @@ interface TrendingItem {
   image: string;
 }
 
-interface HeroItem {
-  id: string;
-  title: string;
-  image: string;
-  subtitle: string;
-}
-
-export default function HomePage() {
+export default function HomeScreen() {
+  const router = useRouter();
+  const { addToCart, toggleLike, isLiked } = useCart();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isMenuVisualOpen, setIsMenuVisualOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [activeFilterDropdown, setActiveFilterDropdown] = useState<
+    string | null
+  >(null);
+  const [selectedFilters, setSelectedFilters] = useState({
+    price: "All",
+    location: "All",
+    date: "All",
+    time: "Any Time",
+  });
   const scrollY = useRef(new Animated.Value(0)).current;
   const categoriesAnim = useRef(new Animated.Value(0)).current;
   const trendingAnim = useRef(new Animated.Value(0)).current;
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedCategory, setSelectedCategory] = React.useState("All");
-  const [likedItems, setLikedItems] = React.useState<{
-    [key: string]: boolean;
-  }>({});
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isMenuVisualOpen, setIsMenuVisualOpen] = useState(false);
+  const filterMoveAnim = useRef(new Animated.Value(0)).current;
+  const filterPanelAnim = useRef(new Animated.Value(0)).current;
+  const formatPrice = (p: string) => {
+    if (!p) return "Rs 0";
+    const numericPrice = p.replace(/^(rs|RS)\s*/i, "").replace(/,/g, "");
+    return `Rs ${numericPrice.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
+  };
+  const resolveImage = (u: string) =>
+    u && /^https?:/.test(u)
+      ? u
+      : "https://via.placeholder.com/400x300?text=Image";
+
+  const getFilterPanelHeight = useCallback(() => {
+    if (!isFilterOpen) return 0;
+    // Increased fixed height for 3 rows of filters
+    return 165;
+  }, [isFilterOpen]);
+
+  useEffect(() => {
+    Animated.spring(filterMoveAnim, {
+      toValue: isFilterOpen ? 1 : 0,
+      friction: 8,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+
+    Animated.timing(filterPanelAnim, {
+      toValue: getFilterPanelHeight(),
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+
+    if (!isFilterOpen) {
+      setActiveFilterDropdown(null);
+    }
+  }, [
+    isFilterOpen,
+    activeFilterDropdown,
+    filterMoveAnim,
+    filterPanelAnim,
+    getFilterPanelHeight,
+  ]);
+
+  const FILTER_OPTIONS = {
+    price: ["All", "Low to High", "High to Low"],
+    location: ["All", "Nearby", "Remote"],
+    date: ["All", "Today", "Yesterday", "This Week", "This Month"],
+    time: ["Any Time", "Morning", "Afternoon", "Evening", "Night"],
+  };
+
+  const handleFilterSelect = (type: string, value: string) => {
+    setSelectedFilters((prev) => ({ ...prev, [type]: value }));
+    setActiveFilterDropdown(null);
+  };
 
   const handleMenuPress = () => {
     if (!isSidebarOpen) {
@@ -245,18 +303,12 @@ export default function HomePage() {
         toValue: 1,
         tension: 20,
         friction: 7,
-        delay: 400,
         useNativeDriver: true,
       }),
     ]).start();
   }, [categoriesAnim, trendingAnim]);
 
-  const toggleLike = (id: string) => {
-    setLikedItems((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
+  // addToCart function is now provided by the CartContext
 
   const renderCategory = ({
     item,
@@ -272,26 +324,36 @@ export default function HomePage() {
     });
 
     return (
-      <Animated.View
-        style={[
-          styles.categoryContainer,
-          {
-            transform: [{ translateX }],
-            opacity: categoriesAnim,
-          },
-        ]}
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() =>
+          router.push({
+            pathname: "/category-details",
+            params: { category: item.name },
+          })
+        }
       >
-        <View style={styles.categoryCard}>
-          <Image
-            source={{ uri: item.image }}
-            style={styles.categoryImage}
-            resizeMode="cover"
-          />
-        </View>
-        <View style={styles.categoryTextContainer}>
-          <Text style={styles.categoryLabel}>{item.name}</Text>
-        </View>
-      </Animated.View>
+        <Animated.View
+          style={[
+            styles.categoryContainer,
+            {
+              transform: [{ translateX }],
+              opacity: categoriesAnim,
+            },
+          ]}
+        >
+          <View style={styles.categoryCard}>
+            <Image
+              source={{ uri: resolveImage(item.image) }}
+              style={styles.categoryImage}
+              resizeMode="cover"
+            />
+          </View>
+          <View style={styles.categoryTextContainer}>
+            <Text style={styles.categoryLabel}>{item.name}</Text>
+          </View>
+        </Animated.View>
+      </TouchableOpacity>
     );
   };
 
@@ -303,7 +365,7 @@ export default function HomePage() {
     index: number;
   }) => {
     if (!item) return null;
-    const isLiked = likedItems[item.id];
+    const isItemLiked = isLiked(item.id);
 
     // Entrance animation on mount
     const mountOpacity = trendingAnim.interpolate({
@@ -317,90 +379,114 @@ export default function HomePage() {
     });
 
     return (
-      <Animated.View
-        style={[
-          styles.trendingCard,
-          {
-            opacity: mountOpacity,
-            transform: [{ translateY: mountTranslateY }],
-          },
-        ]}
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => {
+          router.push({
+            pathname: "/product-details",
+            params: {
+              id: item.id,
+              title: item.title,
+              price: item.price,
+              image: item.image,
+              location: "Available",
+              type: "Trending",
+              postedDate: "New",
+            },
+          });
+        }}
       >
-        <View style={styles.trendingImageWrapper}>
-          <Image
-            source={{ uri: item.image }}
-            style={styles.trendingImage}
-            resizeMode="cover"
-          />
-          <TouchableOpacity
-            style={styles.heartButton}
-            activeOpacity={0.7}
-            onPress={() => toggleLike(item.id)}
-          >
-            <Ionicons
-              name={isLiked ? "heart" : "heart-outline"}
-              size={20}
-              color={isLiked ? "#FF4B6E" : "#fff"}
+        <Animated.View
+          style={[
+            styles.trendingCard,
+            {
+              opacity: mountOpacity,
+              transform: [{ translateY: mountTranslateY }],
+            },
+          ]}
+        >
+          <View style={styles.trendingImageWrapper}>
+            <Image
+              source={{ uri: resolveImage(item.image) }}
+              style={styles.trendingImage}
+              resizeMode="cover"
             />
-          </TouchableOpacity>
-        </View>
-        <View style={styles.trendingInfo}>
-          <Text style={styles.trendingTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.trendingPrice}>{item.price}</Text>
-          <TouchableOpacity style={styles.addButton} activeOpacity={0.7}>
-            <Ionicons name="add" size={22} color="#1E7C7E" />
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
+            <TouchableOpacity
+              style={styles.heartButton}
+              activeOpacity={0.7}
+              onPress={(e) => {
+                e.stopPropagation();
+                toggleLike({
+                  id: item.id,
+                  title: item.title,
+                  price: item.price,
+                  image: item.image,
+                  location: "Available",
+                  type: "Trending",
+                  postedDate: "New",
+                });
+              }}
+            >
+              <Ionicons
+                name={isItemLiked ? "heart" : "heart-outline"}
+                size={20}
+                color={isItemLiked ? "#FF4B6E" : "#fff"}
+              />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.trendingInfo}>
+            <Text style={styles.trendingTitle} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.trendingPrice}>{formatPrice(item.price)}</Text>
+            <TouchableOpacity
+              style={styles.addButton}
+              activeOpacity={0.7}
+              onPress={(e) => {
+                e.stopPropagation();
+                addToCart({
+                  id: item.id,
+                  title: item.title,
+                  price: item.price,
+                  image: item.image,
+                  location: "Available",
+                  type: "Trending",
+                  postedDate: "New",
+                });
+              }}
+            >
+              <Ionicons name="add" size={22} color="#1E7C7E" />
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </TouchableOpacity>
     );
   };
 
   const menuItems = [
-    {
-      icon: Home,
-      label: "Home",
-      onClick: () => alert("Home!"),
-    },
-    {
-      icon: ShoppingCart,
-      label: "Cart",
-      onClick: () => alert("Cart!"),
-    },
-    {
-      icon: MessageSquare,
-      label: "Chatbot",
-      onClick: () => alert("Chatbot!"),
-    },
-    {
-      icon: Heart,
-      label: "Liked",
-      onClick: () => alert("Liked!"),
-    },
-    {
-      icon: User,
-      label: "Profile",
-      onClick: () => alert("Profile!"),
-    },
+    { icon: Home, label: "Home", path: "/home" },
+    { icon: ShoppingCart, label: "Cart", path: "/cart" },
+    { icon: MessageSquare, label: "Chatbot", path: "/chatbot" },
+    { icon: Heart, label: "Liked", path: "/liked" },
+    { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
   const handleMenuItemPress = (index: number) => {
     switch (index) {
       case 0:
-        // Already on home
+        router.push("/home");
         break;
       case 1:
-        alert("Cart coming soon!");
+        router.push("/cart");
         break;
       case 2:
-        alert("Chatbot coming soon!");
+        router.push("/chatbot");
         break;
       case 3:
-        alert("Liked coming soon!");
+        router.push("/liked");
         break;
       case 4:
-        alert("Profile coming soon!");
+        router.push("/settings");
         break;
       default:
         break;
@@ -413,88 +499,340 @@ export default function HomePage() {
       <StatusBar barStyle="light-content" />
 
       {/* Header */}
-      <View style={styles.header}>
+      <LinearGradient
+        colors={["#031d1e", "#063537", "#0D5A5B", "#1E7C7E"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <View style={styles.headerTop}>
           <TouchableOpacity
             onPress={handleMenuPress}
-            style={{ marginRight: 8, marginLeft: 4, zIndex: 2 }}
+            style={styles.menuButton}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            activeOpacity={0.7}
           >
             <LottieHamburger isOpen={isMenuVisualOpen} size={36} />
           </TouchableOpacity>
+
           <View style={styles.logoContainer}>
-            <InfinityLoader size={0.9} />
+            <View style={{ paddingRight: 8 }}>
+              <InfinityLoader size={0.7} />
+            </View>
             <Text style={styles.logoText}>SCRAPIT</Text>
           </View>
 
-          <SearchBar
-            containerStyle={styles.searchContainer}
-            placeholder="Search your perfect find..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onCategorySelect={setSelectedCategory}
-            selectedCategory={selectedCategory}
-            categories={[
-              "All",
-              "Jobs",
-              "Property",
-              "E-Commerce",
-              "Automobiles",
-              "Travel",
-              "Food",
-            ]}
-          />
+          <View style={styles.searchWrapper}>
+            <SearchBar
+              placeholder="Search..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onCategorySelect={setSelectedCategory}
+              selectedCategory={selectedCategory}
+              onFilterToggle={() => setIsFilterOpen(!isFilterOpen)}
+              categories={[
+                "All",
+                "Jobs",
+                "Property",
+                "E-Commerce",
+                "Automobiles",
+                "Travel",
+                "Food",
+              ]}
+            />
+          </View>
         </View>
-      </View>
+      </LinearGradient>
+
+      {/* Independent Filter Panel below Header */}
+      <Animated.View
+        style={[
+          styles.filterPanel,
+          {
+            height: filterPanelAnim,
+            opacity: isFilterOpen ? 1 : 0,
+            marginBottom: isFilterOpen ? 10 : 0,
+            zIndex: 1000,
+            overflow: "visible", // Allow dropdowns to overflow
+          },
+        ]}
+      >
+        <View style={styles.filterContainer}>
+          <View
+            style={[
+              styles.filterRow,
+              {
+                zIndex:
+                  activeFilterDropdown === "price" ||
+                  activeFilterDropdown === "location"
+                    ? 3000
+                    : 1000,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.filterItemContainer,
+                { zIndex: activeFilterDropdown === "price" ? 3001 : 1001 },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.filterItem}
+                onPress={() =>
+                  setActiveFilterDropdown(
+                    activeFilterDropdown === "price" ? null : "price",
+                  )
+                }
+              >
+                <Text style={styles.filterLabel} numberOfLines={1}>
+                  Price: {selectedFilters.price}
+                </Text>
+                <Ionicons
+                  name={
+                    activeFilterDropdown === "price"
+                      ? "chevron-up"
+                      : "chevron-down"
+                  }
+                  size={14}
+                  color="#666"
+                />
+              </TouchableOpacity>
+              {activeFilterDropdown === "price" && (
+                <View style={styles.filterDropdown}>
+                  {FILTER_OPTIONS.price.map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={styles.dropdownOption}
+                      onPress={() => handleFilterSelect("price", opt)}
+                    >
+                      <Text style={styles.dropdownOptionText}>{opt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View
+              style={[
+                styles.filterItemContainer,
+                { zIndex: activeFilterDropdown === "location" ? 3001 : 1001 },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.filterItem}
+                onPress={() =>
+                  setActiveFilterDropdown(
+                    activeFilterDropdown === "location" ? null : "location",
+                  )
+                }
+              >
+                <Text style={styles.filterLabel} numberOfLines={1}>
+                  Loc: {selectedFilters.location}
+                </Text>
+                <Ionicons
+                  name={
+                    activeFilterDropdown === "location"
+                      ? "chevron-up"
+                      : "chevron-down"
+                  }
+                  size={14}
+                  color="#666"
+                />
+              </TouchableOpacity>
+              {activeFilterDropdown === "location" && (
+                <View style={styles.filterDropdown}>
+                  {FILTER_OPTIONS.location.map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={styles.dropdownOption}
+                      onPress={() => handleFilterSelect("location", opt)}
+                    >
+                      <Text style={styles.dropdownOptionText}>{opt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.filterRow,
+              {
+                zIndex:
+                  activeFilterDropdown === "date" ||
+                  activeFilterDropdown === "time"
+                    ? 2000
+                    : 500,
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.filterItemContainer,
+                { zIndex: activeFilterDropdown === "date" ? 2001 : 501 },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.filterItem}
+                onPress={() =>
+                  setActiveFilterDropdown(
+                    activeFilterDropdown === "date" ? null : "date",
+                  )
+                }
+              >
+                <Text style={styles.filterLabel} numberOfLines={1}>
+                  Date: {selectedFilters.date}
+                </Text>
+                <Ionicons
+                  name={
+                    activeFilterDropdown === "date"
+                      ? "chevron-up"
+                      : "chevron-down"
+                  }
+                  size={14}
+                  color="#666"
+                />
+              </TouchableOpacity>
+              {activeFilterDropdown === "date" && (
+                <View style={styles.filterDropdown}>
+                  {FILTER_OPTIONS.date.map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={styles.dropdownOption}
+                      onPress={() => handleFilterSelect("date", opt)}
+                    >
+                      <Text style={styles.dropdownOptionText}>{opt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View
+              style={[
+                styles.filterItemContainer,
+                { zIndex: activeFilterDropdown === "time" ? 2001 : 501 },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.filterItem}
+                onPress={() =>
+                  setActiveFilterDropdown(
+                    activeFilterDropdown === "time" ? null : "time",
+                  )
+                }
+              >
+                <Text style={styles.filterLabel} numberOfLines={1}>
+                  Time: {selectedFilters.time}
+                </Text>
+                <Ionicons
+                  name={
+                    activeFilterDropdown === "time"
+                      ? "chevron-up"
+                      : "chevron-down"
+                  }
+                  size={14}
+                  color="#666"
+                />
+              </TouchableOpacity>
+              {activeFilterDropdown === "time" && (
+                <View style={styles.filterDropdown}>
+                  {FILTER_OPTIONS.time.map((opt) => (
+                    <TouchableOpacity
+                      key={opt}
+                      style={styles.dropdownOption}
+                      onPress={() => handleFilterSelect("time", opt)}
+                    >
+                      <Text style={styles.dropdownOptionText}>{opt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.filterRow, { zIndex: 0 }]}>
+            <TouchableOpacity
+              style={[styles.filterItem, styles.resetButton]}
+              onPress={() => {
+                setSelectedFilters({
+                  price: "All",
+                  location: "All",
+                  date: "All",
+                  time: "Any Time",
+                });
+                setIsFilterOpen(false);
+              }}
+            >
+              <Text style={styles.resetText}>Reset Filters</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
 
       <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
+          { useNativeDriver: true },
         )}
         scrollEventThrottle={16}
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: 60, flexGrow: 1 }}
       >
-        {/* Hero Carousel - 3D Animated */}
-        <Carousel3D data={HERO_ITEMS} />
+        <Animated.View
+          style={{
+            transform: [
+              {
+                translateY: filterMoveAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0], // Content no longer needs to move down manually, as it's below the expanding panel
+                }),
+              },
+            ],
+          }}
+        >
+          {/* Hero Carousel - 3D Animated */}
+          <Carousel3D data={HERO_ITEMS} />
 
-        {/* Categories Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Categories</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeMore}>See more {">"}</Text>
-          </TouchableOpacity>
-        </View>
-        <FlatList
-          data={CATEGORIES}
-          renderItem={renderCategory}
-          keyExtractor={(item) => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoriesList}
-        />
+          {/* Categories Section */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Categories</Text>
+            <TouchableOpacity activeOpacity={0.7}>
+              <Text style={styles.seeMore}>See more {">"}</Text>
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={CATEGORIES}
+            renderItem={renderCategory}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriesList}
+          />
 
-        {/* Trending Now Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Trending Now</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeMore}>See more {">"}</Text>
-          </TouchableOpacity>
-        </View>
+          {/* Trending Now Section */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Trending Now</Text>
+            <TouchableOpacity activeOpacity={0.7}>
+              <Text style={styles.seeMore}>See more {">"}</Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.trendingGrid}>
-          {filteredTrendingItems.map((item, index) => (
-            <React.Fragment key={item.id}>
-              {renderTrendingItem({ item, index })}
-            </React.Fragment>
-          ))}
-          {filteredTrendingItems.length === 0 && (
-            <View style={styles.noResults}>
-              <Ionicons name="search-outline" size={48} color="#CCC" />
-              <Text style={styles.noResultsText}>No items found</Text>
-            </View>
-          )}
-        </View>
+          <View style={styles.trendingGrid}>
+            {filteredTrendingItems.map((item, index) => (
+              <React.Fragment key={item.id}>
+                {renderTrendingItem({ item, index })}
+              </React.Fragment>
+            ))}
+            {filteredTrendingItems.length === 0 && (
+              <View style={styles.noResults}>
+                <Ionicons name="search-outline" size={48} color="#CCC" />
+                <Text style={styles.noResultsText}>No items found</Text>
+              </View>
+            )}
+          </View>
+        </Animated.View>
       </Animated.ScrollView>
 
       <InteractiveMenu items={menuItems} onItemPress={handleMenuItemPress} />
@@ -511,57 +849,65 @@ const styles = StyleSheet.create({
     backgroundColor: "#1E7C7E",
     paddingHorizontal: 16,
     paddingTop: Platform.OS === "ios" ? 0 : 10,
-    paddingBottom: 20,
+    paddingBottom: 5,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
   headerTop: {
     flexDirection: "row",
-    alignItems: "center",
-    height: 60,
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    height: 70,
+    marginTop: Platform.OS === "ios" ? 0 : 10,
     position: "relative",
-    paddingHorizontal: 0,
-    marginTop: 4,
+    zIndex: 100,
+    paddingBottom: 2,
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 101,
+    borderWidth: 1,
+
+    borderColor: "rgba(255, 255, 255, 0.2)",
   },
   logoContainer: {
     flexDirection: "row",
     alignItems: "center",
-    zIndex: 1,
     position: "absolute",
-    left: 44, // Moved right to make space for menu icon
-    top: 4,
+    left: -25,
+    top: -25,
+    justifyContent: "center",
+    zIndex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   logoText: {
     color: "#ffffff",
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "900",
     letterSpacing: 1,
-    marginLeft: -10,
+    marginLeft: -15, // Slight negative margin to bring text closer to infinity loader
   },
-  searchContainer: {
-    position: "absolute",
-    right: 1,
-    top: 26,
-    zIndex: 10,
-  },
-  filterButton: {
-    width: 42,
-    height: 42,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderRadius: 21,
+  searchWrapper: {
+    zIndex: 102,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
-    position: "absolute",
-    right: -5,
-    top: 25,
+    flex: 1,
+    marginRight: -10,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 15,
+    marginTop: 0,
+    marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 20,
@@ -574,7 +920,7 @@ const styles = StyleSheet.create({
   },
   categoriesList: {
     paddingLeft: 16,
-    paddingBottom: 10,
+    paddingBottom: 0,
   },
   categoryContainer: {
     width: 100,
@@ -610,13 +956,8 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   categoryTextContainer: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(30, 124, 126, 0.08)",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
   categoryLabel: {
     color: "#1E7C7E",
@@ -628,31 +969,101 @@ const styles = StyleSheet.create({
   trendingGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
     justifyContent: "space-between",
-    paddingBottom: 0,
+    width: "100%",
+    paddingBottom: 20,
   },
-  trendingCard: {
-    width: (width - 48) / 2,
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    marginHorizontal: 8,
-    marginBottom: 12,
+  filterPanel: {
+    backgroundColor: "#FFFFFF",
+    width: "100%",
     overflow: "hidden",
+  },
+  filterContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  filterRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 12,
+    position: "relative",
+  },
+  filterItemContainer: {
+    flex: 1,
+    position: "relative",
+  },
+  filterItem: {
+    height: 40,
+    backgroundColor: "#F5F5F5",
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#EEE",
+  },
+  filterDropdown: {
+    position: "absolute",
+    top: 45,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 10,
+    padding: 5,
+    zIndex: 9999,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: "#EEE",
+    maxHeight: 200, // Limit height if many options
     ...Platform.select({
       ios: {
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
       },
       android: {
-        elevation: 4,
-      },
-      web: {
-        boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.1)",
+        elevation: 10,
       },
     }),
+  },
+  dropdownOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+  },
+  dropdownOptionText: {
+    fontSize: 13,
+    color: "#333",
+  },
+  filterLabel: {
+    fontSize: 12,
+    color: "#444",
+    fontWeight: "500",
+  },
+  resetButton: {
+    backgroundColor: "#FFEBEB",
+    borderColor: "#FFD6D6",
+    justifyContent: "center",
+  },
+  resetText: {
+    color: "#FF4444",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  trendingCard: {
+    width: (width - 44) / 2, // 16*2 padding + 12 gap = 44
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    marginBottom: 16,
+    overflow: "hidden",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   trendingImageWrapper: {
     height: 180,

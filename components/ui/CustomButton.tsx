@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ViewStyle,
   Platform,
+  ActivityIndicator,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface CustomButtonProps {
   title: string;
@@ -17,6 +19,8 @@ interface CustomButtonProps {
   iconColor?: string;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  disabled?: boolean;
+  loading?: boolean;
 }
 
 export const CustomButton: React.FC<CustomButtonProps> = ({
@@ -27,6 +31,8 @@ export const CustomButton: React.FC<CustomButtonProps> = ({
   iconColor,
   style,
   textStyle,
+  disabled = false,
+  loading = false,
 }) => {
   const getButtonStyle = () => {
     switch (variant) {
@@ -50,21 +56,53 @@ export const CustomButton: React.FC<CustomButtonProps> = ({
     }
   };
 
+  const getLoaderColor = () => {
+    switch (variant) {
+      case "secondary":
+        return "#1E7C7E";
+      case "google":
+        return "#757575";
+      default:
+        return "#FFFFFF";
+    }
+  };
+
   return (
     <TouchableOpacity
-      style={[styles.button, getButtonStyle(), style]}
+      style={[
+        styles.button,
+        getButtonStyle(),
+        style,
+        (disabled || loading) && styles.disabledButton,
+      ]}
       onPress={onPress}
       activeOpacity={0.8}
+      disabled={disabled || loading}
     >
-      {icon && (
-        <Ionicons
-          name={icon}
-          size={20}
-          color={iconColor || (variant === "google" ? "#DB4437" : "#E8F4F5")}
-          style={styles.icon}
+      {variant === "primary" && (
+        <LinearGradient
+          colors={["#031d1e", "#063537", "#0D5A5B", "#1E7C7E"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.gradientFill}
+          pointerEvents="none"
         />
       )}
-      <Text style={[getTextStyle(), textStyle]}>{title}</Text>
+      {loading ? (
+        <ActivityIndicator color={getLoaderColor()} style={styles.loader} />
+      ) : (
+        <>
+          {icon && (
+            <Ionicons
+              name={icon}
+              size={20}
+              color={iconColor || (variant === "google" ? "#DB4437" : "#E8F4F5")}
+              style={styles.icon}
+            />
+          )}
+          <Text style={[getTextStyle(), textStyle]}>{title}</Text>
+        </>
+      )}
     </TouchableOpacity>
   );
 };
@@ -77,9 +115,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     marginBottom: 18,
+    overflow: "hidden",
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   primaryButton: {
-    backgroundColor: "#1E7C7E",
     ...Platform.select({
       ios: {
         shadowColor: "#1E7C7E",
@@ -88,40 +129,61 @@ const styles = StyleSheet.create({
           height: 4,
         },
         shadowOpacity: 0.3,
-        shadowRadius: 5,
+        shadowRadius: 4.65,
       },
       android: {
         elevation: 8,
       },
-      web: {
-        boxShadow: "0px 4px 5px rgba(30, 124, 126, 0.3)",
-      },
     }),
   },
   secondaryButton: {
-    backgroundColor: "#E8F4F5",
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: "#1E7C7E",
   },
   googleButton: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#D0D0D0",
+    borderColor: "#E0E0E0",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  gradientFill: {
+    ...StyleSheet.absoluteFillObject,
   },
   primaryButtonText: {
-    color: "#E8F4F5",
-    fontSize: 17,
+    color: "#FFFFFF",
+    fontSize: 18,
     fontWeight: "700",
+    letterSpacing: 0.5,
   },
   secondaryButtonText: {
     color: "#1E7C7E",
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "700",
+    letterSpacing: 0.5,
   },
   googleButtonText: {
-    color: "#5A5A5A",
+    color: "#757575",
     fontSize: 16,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   icon: {
-    marginRight: 12,
+    marginRight: 10,
+  },
+  loader: {
+    marginRight: 0,
   },
 });

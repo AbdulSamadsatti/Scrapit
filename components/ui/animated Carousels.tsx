@@ -11,7 +11,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const ITEM_WIDTH = SCREEN_WIDTH * 0.72;
+const ITEM_WIDTH = SCREEN_WIDTH * 0.8;
 const ITEM_SPACING = (SCREEN_WIDTH - ITEM_WIDTH) / 2;
 const CARD_HEIGHT = 220;
 
@@ -56,19 +56,19 @@ export default function Carousel3D({ data }: Carousel3DProps) {
 
           const scale = scrollX.interpolate({
             inputRange,
-            outputRange: [0.9, 1, 0.9],
+            outputRange: [0.85, 1, 0.85],
             extrapolate: "clamp",
           });
 
           const rotateY = scrollX.interpolate({
             inputRange,
-            outputRange: ["35deg", "0deg", "-35deg"],
+            outputRange: ["15deg", "0deg", "-15deg"],
             extrapolate: "clamp",
           });
 
           const translateX = scrollX.interpolate({
             inputRange,
-            outputRange: [20, 0, -20],
+            outputRange: [0, 0, 0],
             extrapolate: "clamp",
           });
 
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   card: {
-    width: ITEM_WIDTH - 20,
+    width: ITEM_WIDTH - 40,
     height: CARD_HEIGHT,
     borderRadius: 24,
     overflow: "hidden",

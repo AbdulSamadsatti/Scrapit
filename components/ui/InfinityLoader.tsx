@@ -5,16 +5,21 @@ import Svg, { Path, Defs, LinearGradient, Stop } from "react-native-svg";
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 interface InfinityLoaderProps {
+  color?: string;
   color1?: string;
   color2?: string;
   size?: number;
 }
 
 export default function InfinityLoader({
-  color1 = "#FFFFFF",
-  color2 = "#FFFFFF",
+  color,
+  color1,
+  color2,
   size = 0.3,
 }: InfinityLoaderProps) {
+  const finalColor1 = color1 ?? color ?? "#FFFFFF";
+  const finalColor2 = color2 ?? color ?? "#FFFFFF";
+
   const dashOffset = useRef(new Animated.Value(192)).current;
 
   useEffect(() => {
@@ -23,7 +28,7 @@ export default function InfinityLoader({
         toValue: 1,
         duration: 1800,
         useNativeDriver: false,
-      })
+      }),
     ).start();
   }, [dashOffset]);
 
@@ -32,8 +37,8 @@ export default function InfinityLoader({
       <Svg width={100 * size} height={60 * size} viewBox="0 0 187.3 93.7">
         <Defs>
           <LinearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <Stop offset="0%" stopColor={color1} />
-            <Stop offset="100%" stopColor={color2} />
+            <Stop offset="0%" stopColor={finalColor1} />
+            <Stop offset="100%" stopColor={finalColor2} />
           </LinearGradient>
         </Defs>
         <AnimatedPath

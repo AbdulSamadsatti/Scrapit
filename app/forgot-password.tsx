@@ -14,12 +14,18 @@ import {
 } from "react-native";
 
 import { ShuffleText } from "../components/ui/ShuffleText";
+import { CustomButton } from "@/components/ui/CustomButton";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [authError, setAuthError] = useState("");
 
   // Shake animation value
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -40,22 +46,22 @@ export default function ForgotPasswordScreen() {
 
   const triggerShake = () => {
     Animated.sequence([
-      Animated.timing(shakeAnim, {
+      Animated.timing(inputAnims[0], {
         toValue: 10,
         duration: 50,
         useNativeDriver: true,
       }),
-      Animated.timing(shakeAnim, {
+      Animated.timing(inputAnims[0], {
         toValue: -10,
         duration: 50,
         useNativeDriver: true,
       }),
-      Animated.timing(shakeAnim, {
+      Animated.timing(inputAnims[0], {
         toValue: 10,
         duration: 50,
         useNativeDriver: true,
       }),
-      Animated.timing(shakeAnim, {
+      Animated.timing(inputAnims[0], {
         toValue: 0,
         duration: 50,
         useNativeDriver: true,
@@ -134,18 +140,12 @@ export default function ForgotPasswordScreen() {
     const formattedPhone = digits.length > 0 ? "+92 " + digits : "";
     setPhone(formattedPhone);
 
+    // Show error message and shake if user is typing invalid Pakistani mobile number
     if (digits.length > 0 && digits[0] !== "3") {
-      setPhoneError("Invalid Pakistani mobile number");
-    } else if (
-      digits.length === 0 ||
-      (digits.length > 0 && digits[0] === "3")
-    ) {
-      if (
-        phoneError === "Invalid Pakistani mobile number" ||
-        digits.length === 10
-      ) {
-        setPhoneError("");
-      }
+      setPhoneError("Invalid Pakistani mobile number - must start with 3");
+      triggerShake(); // Shake the phone input field immediately
+    } else {
+      setPhoneError("");
     }
   };
 
@@ -161,18 +161,37 @@ export default function ForgotPasswordScreen() {
     }
   };
 
-  const handleResetPassword = () => {
+  const handleResetPassword = async () => {
+    setEmailError("");
     setPhoneError("");
+    setAuthError("");
+    setSuccessMessage("");
+    let hasError = false;
+
+    if (!email.trim()) {
+      setEmailError("Email is required");
+      hasError = true;
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      setEmailError("Invalid email format");
+      hasError = true;
+    }
+
     const cleanPhone = phone.replace(/\D/g, "");
     if (!phone || cleanPhone.length !== 12 || cleanPhone[2] !== "3") {
       setPhoneError("Valid Pakistani phone number is required");
       triggerShake();
-      return;
+      hasError = true;
     }
-    router.push({
-      pathname: "/verification-forgot",
-      params: { phone },
-    });
+
+    if (hasError) return;
+
+    setIsLoading(true);
+    // Simulate reset delay
+    setTimeout(() => {
+      console.log("Simulated password reset email sent");
+      setSuccessMessage("Password reset email sent! Please check your inbox.");
+      setIsLoading(false);
+    }, 1500);
   };
 
   return (
@@ -226,6 +245,45 @@ export default function ForgotPasswordScreen() {
             No worries, we'll send you{"\n"}reset instructions
           </Text>
 
+          {/* Email Input */}
+          <Animated.View
+            style={[
+              styles.inputWrapper,
+              {
+                transform: [{ translateX: inputAnims[0] }],
+                marginBottom: 15,
+              },
+            ]}
+          >
+            <Ionicons
+              name="mail-outline"
+              size={20}
+              color="#6B9A9C"
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={[
+                styles.input,
+                focusedInput === "email" && styles.inputFocused,
+                emailError ? styles.inputError : null,
+              ]}
+              placeholder="Email Address"
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (emailError) setEmailError("");
+              }}
+              onFocus={() => setFocusedInput("email")}
+              onBlur={() => setFocusedInput(null)}
+              placeholderTextColor="#8F8F8F"
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </Animated.View>
+          {emailError ? (
+            <Text style={styles.errorText}>{emailError}</Text>
+          ) : null}
+
           {/* Phone Input */}
           <Animated.View
             style={[
@@ -235,7 +293,7 @@ export default function ForgotPasswordScreen() {
                   { translateX: inputAnims[0] },
                   { translateX: shakeAnim },
                 ],
-                marginBottom: 20,
+                marginBottom: 15,
               },
             ]}
           >
@@ -264,16 +322,31 @@ export default function ForgotPasswordScreen() {
               maxLength={14}
             />
           </Animated.View>
+          {phoneError ? (
+            <Text style={styles.errorText}>{phoneError}</Text>
+          ) : null}
+
+          {successMessage ? (
+            <Text style={[styles.successText, { textAlign: 'center', marginBottom: 10 }]}>{successMessage}</Text>
+          ) : null}
+
+          {authError ? (
+            <Text style={[styles.errorText, { textAlign: 'center', marginBottom: 10 }]}>{authError}</Text>
+          ) : null}
 
           {/* Reset Password Button */}
-          <Animated.View style={{ transform: [{ translateX: inputAnims[1] }] }}>
-            <TouchableOpacity
-              style={styles.loginBtn}
+          <Animated.View
+            style={{
+              transform: [{ translateX: inputAnims[1] }],
+              marginTop: 10,
+            }}
+          >
+            <CustomButton
+              title="Reset Password"
+              variant="primary"
               onPress={handleResetPassword}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.loginBtnText}>Reset Password</Text>
-            </TouchableOpacity>
+              loading={isLoading}
+            />
           </Animated.View>
 
           {/* Back to Login */}
@@ -362,7 +435,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#EAF6F7",
     borderRadius: 25,
-    paddingLeft: 45,
+    paddingLeft: 35,
     paddingRight: 20,
     height: 52,
     borderWidth: 1,
@@ -372,7 +445,7 @@ const styles = StyleSheet.create({
   },
   inputIcon: {
     position: "absolute",
-    left: 16,
+    left: 12,
     zIndex: 10,
   },
   inputFocused: {
@@ -386,37 +459,16 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#E74C3C",
     fontSize: 12,
-    marginTop: 4,
-    marginLeft: 16,
-    marginBottom: 10,
+    marginTop: 2,
+    marginLeft: 12,
+    marginBottom: 6,
   },
-  loginBtn: {
-    backgroundColor: "#1E7C7E",
-    borderRadius: 25,
-    height: 52,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 10,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#1E7C7E",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 5,
-      },
-      android: {
-        elevation: 8,
-      },
-      web: {
-        boxShadow: "0px 4px 5px rgba(30, 124, 126, 0.3)",
-      },
-    }),
+  successText: {
+    color: "#2ECC71",
+    fontSize: 14,
+    fontWeight: "600",
   },
-  loginBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 17,
-  },
+
   backButton: {
     marginTop: 24,
     alignItems: "center",

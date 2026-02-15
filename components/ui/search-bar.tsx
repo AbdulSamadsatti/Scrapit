@@ -3,14 +3,13 @@ import {
   StyleSheet,
   View,
   TextInput,
-  Text,
   Platform,
   TouchableOpacity,
   Animated,
   Dimensions,
   ViewStyle,
-  Modal,
   FlatList,
+  Text,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Filter from "./Filter";
@@ -28,6 +27,7 @@ export interface SearchBarProps {
   categories?: string[];
   onCategorySelect?: (category: string) => void;
   selectedCategory?: string;
+  onFilterToggle?: (isOpen: boolean) => void;
 }
 
 export const SearchBar = ({
@@ -39,6 +39,7 @@ export const SearchBar = ({
   categories = ["All", "Electronics", "Fashion", "Home", "Sports", "Beauty"],
   onCategorySelect,
   selectedCategory: propSelectedCategory,
+  onFilterToggle,
 }: SearchBarProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [internalValue, setInternalValue] = useState("");
@@ -70,7 +71,7 @@ export const SearchBar = ({
     if (isExpanded) {
       inputRef.current?.focus();
     }
-  }, [isExpanded]);
+  }, [isExpanded, expandAnim]);
 
   const toggleSearch = () => {
     if (!isExpanded) {
@@ -95,16 +96,18 @@ export const SearchBar = ({
 
   const barWidth = expandAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [90, SCREEN_WIDTH - 80], // Increased collapsed width to fit both icons
+    outputRange: [44, SCREEN_WIDTH - 120], // Adjusted to leave room for filter
   });
 
-  const filterOpacity = expandAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [1, 0, 0], // Hide when expanded
+  const filterOpacity = 1; // Always visible
+
+  const filterTranslateX = expandAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0], // Don't move the filter
   });
 
   const opacity = expandAnim.interpolate({
-    inputRange: [0, 0.2, 1], // Faster opacity fade in
+    inputRange: [0, 0.2, 1],
     outputRange: [0, 1, 1],
   });
 
@@ -125,20 +128,100 @@ export const SearchBar = ({
 
   return (
     <View style={[styles.wrapper, containerStyle]}>
-      <Animated.View
-        style={[
-          styles.container,
-          {
-            width: barWidth,
-            borderRadius: 22,
-            backgroundColor: barBackground,
-            borderColor: isExpanded ? "#EEE" : "rgba(255,255,255,0.2)",
-            borderWidth: 1,
-          },
-        ]}
-      >
-        {!isExpanded ? (
-          <View style={styles.collapsedIconsContainer}>
+      <View style={styles.row}>
+        <Animated.View
+          style={[
+            styles.container,
+            {
+              width: barWidth,
+              borderRadius: 22,
+              backgroundColor: barBackground,
+              borderColor: isExpanded ? "#EEE" : "rgba(255,255,255,0.2)",
+              borderWidth: 1,
+              overflow: isExpanded ? "visible" : "hidden",
+            },
+          ]}
+        >
+          {isExpanded ? (
+            <Animated.View style={[styles.expandedContent, { opacity }]}>
+              <TouchableOpacity
+                style={styles.categoryPicker}
+                onPress={toggleDropdown}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.categoryText} numberOfLines={1}>
+                  {selectedCategory}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color={THEME_COLOR} />
+              </TouchableOpacity>
+
+              <View style={styles.inputContainer}>
+                <TextInput
+                  ref={inputRef}
+                  style={styles.input}
+                  placeholder={placeholder}
+                  value={value}
+                  onChangeText={handleTextChange}
+                  placeholderTextColor="#999"
+                  returnKeyType="search"
+                />
+              </View>
+
+              {value.length > 0 && (
+                <TouchableOpacity
+                  onPress={handleClear}
+                  style={styles.clearIcon}
+                >
+                  <Ionicons name="close-circle" size={18} color="#999" />
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={handleClose}
+                style={styles.closeButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={24} color={THEME_COLOR} />
+              </TouchableOpacity>
+
+              {showDropdown && (
+                <Animated.View style={[styles.dropdown, { opacity }]}>
+                  <View style={styles.dropdownContent}>
+                    <FlatList
+                      data={categories}
+                      keyExtractor={(item) => item}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={[
+                            styles.dropdownItem,
+                            selectedCategory === item && styles.selectedItem,
+                          ]}
+                          onPress={() => handleCategorySelect(item)}
+                        >
+                          <Text
+                            style={[
+                              styles.dropdownItemText,
+                              selectedCategory === item &&
+                                styles.selectedItemText,
+                            ]}
+                          >
+                            {item}
+                          </Text>
+                          {selectedCategory === item && (
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={18}
+                              color={THEME_COLOR}
+                            />
+                          )}
+                        </TouchableOpacity>
+                      )}
+                    />
+                  </View>
+                </Animated.View>
+              )}
+            </Animated.View>
+          ) : (
             <TouchableOpacity
               style={styles.searchIconContainer}
               onPress={toggleSearch}
@@ -146,89 +229,35 @@ export const SearchBar = ({
             >
               <Ionicons name="search" size={20} color="#fff" />
             </TouchableOpacity>
-            <View style={styles.iconDivider} />
-            <Animated.View style={{ opacity: filterOpacity }}>
-              <Filter size={20} onPress={() => setShowDropdown(true)} />
-            </Animated.View>
-          </View>
-        ) : (
-          <View style={styles.expandedContent}>
-            <TouchableOpacity
-              onPress={toggleDropdown}
-              style={styles.categoryPicker}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="filter" size={18} color={THEME_COLOR} />
-              <Text style={styles.categoryText} numberOfLines={1}>
-                {selectedCategory}
-              </Text>
-              <Ionicons
-                name={showDropdown ? "chevron-up" : "chevron-down"}
-                size={14}
-                color={THEME_COLOR}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.divider} />
-
-            <Animated.View style={[styles.inputContainer, { opacity }]}>
-              <TextInput
-                ref={inputRef}
-                style={styles.input}
-                placeholder={placeholder}
-                placeholderTextColor="#999"
-                value={value}
-                onChangeText={handleTextChange}
-              />
-            </Animated.View>
-
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Ionicons name="close-outline" size={22} color="#666" />
-            </TouchableOpacity>
-          </View>
-        )}
-      </Animated.View>
-
-      {showDropdown && isExpanded && (
-        <Animated.View style={[styles.inlineDropdown, { opacity }]}>
-          <View style={styles.dropdownInner}>
-            {categories.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={[
-                  styles.dropdownItem,
-                  selectedCategory === item && styles.selectedItem,
-                ]}
-                onPress={() => handleCategorySelect(item)}
-              >
-                <Text
-                  style={[
-                    styles.dropdownItemText,
-                    selectedCategory === item && styles.selectedItemText,
-                  ]}
-                >
-                  {item}
-                </Text>
-                {selectedCategory === item && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={18}
-                    color={THEME_COLOR}
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
+          )}
         </Animated.View>
-      )}
+
+        <Animated.View
+          style={[
+            styles.filterCircle,
+            {
+              opacity: filterOpacity,
+              transform: [{ translateX: filterTranslateX }],
+            },
+          ]}
+        >
+          <Filter onPress={() => onFilterToggle?.(true)} />
+        </Animated.View>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   wrapper: {
-    height: 44,
-    zIndex: 1000,
+    width: "100%",
+    zIndex: 3000,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6, // Reduced gap from 12 to 6
   },
   container: {
     height: 44,
@@ -236,37 +265,23 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
-        shadowRadius: 8,
+        shadowRadius: 4,
       },
       android: {
-        elevation: 4,
+        elevation: 3,
       },
       web: {
-        boxShadow: "0px 4px 12px rgba(0, 0, 0, 0.1)",
+        boxShadow: "0px 2px 4px rgba(0, 0, 0, 0.1)",
       },
     }),
   },
   searchIconContainer: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     justifyContent: "center",
     alignItems: "center",
-    alignSelf: "center",
-  },
-  collapsedIconsContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    height: "100%",
-  },
-  iconDivider: {
-    width: 1,
-    height: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    marginHorizontal: 2,
   },
   expandedContent: {
     flexDirection: "row",
@@ -278,59 +293,78 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingRight: 8,
-    minWidth: 70, // Reduced from 90 to give more space to input
-    gap: 4,
+    borderRightWidth: 1,
+    borderRightColor: "#EEE",
+    marginRight: 8,
   },
   categoryText: {
-    fontSize: 12,
-    color: THEME_COLOR,
-    fontWeight: "700",
-  },
-  divider: {
-    width: 1,
-    height: 20,
-    backgroundColor: "#EEE",
-    marginHorizontal: 4,
+    fontSize: 13,
+    color: "#333",
+    fontWeight: "500",
+    marginRight: 4,
   },
   inputContainer: {
     flex: 1,
   },
   input: {
-    fontSize: 15,
-    color: "#000000", // Forced solid black for better visibility
-    paddingHorizontal: 8,
+    fontSize: 14,
+    color: "#333",
+    padding: 0,
     height: "100%",
-    minWidth: 100, // Ensure there's a minimum width
+  },
+  clearIcon: {
+    padding: 4,
+    marginRight: 4,
   },
   closeButton: {
     padding: 4,
-    marginLeft: 4,
   },
-  inlineDropdown: {
-    position: "absolute",
-    top: 50,
-    left: 0,
-    right: 0,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+  filterCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#EEE",
+    borderColor: "rgba(255, 255, 255, 0.2)",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
       },
       android: {
-        elevation: 8,
-      },
-      web: {
-        boxShadow: "0px 8px 24px rgba(0, 0, 0, 0.15)",
+        elevation: 3,
       },
     }),
   },
-  dropdownInner: {
+  dropdown: {
+    position: "absolute",
+    top: 45,
+    left: 0,
+    right: 0, // Make it span the full width of the search bar container
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    marginTop: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+    zIndex: 9999,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#EEE",
+  },
+  dropdownContent: {
     padding: 8,
   },
   dropdownItem: {
@@ -338,19 +372,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
   },
   selectedItem: {
-    backgroundColor: "rgba(30, 124, 126, 0.05)",
+    backgroundColor: "#F0F9F9",
   },
   dropdownItemText: {
     fontSize: 14,
-    color: "#666",
-    fontWeight: "500",
+    color: "#444",
   },
   selectedItemText: {
     color: THEME_COLOR,
-    fontWeight: "700",
+    fontWeight: "600",
   },
 });
