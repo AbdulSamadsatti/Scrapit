@@ -36,7 +36,7 @@ export default function ChatbotScreen() {
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
-  const [serverIp, setServerIp] = useState("192.168.0.103");
+  const [serverIp, setServerIp] = useState("10.18.220.102");
   const [serverPort, setServerPort] = useState("8000");
   const flatListRef = useRef<FlatList>(null);
 
