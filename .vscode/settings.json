@@ -1,7 +1,4 @@
 {
-  "editor.codeActionsOnSave": {
-    "source.fixAll": "explicit",
-    "source.organizeImports": "explicit",
-    "source.sortMembers": "explicit"
-  }
+  "python.defaultInterpreterPath": "C:\\Users\\HP\\anaconda3\\python.exe",
+  "python.pythonPath": "C:\\Users\\HP\\anaconda3\\python.exe"
 }

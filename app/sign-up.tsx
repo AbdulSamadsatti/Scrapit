@@ -13,8 +13,10 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { CustomButton } from "@/components/ui/CustomButton";
 import { ShuffleText } from "@/components/ui/ShuffleText";
+import { auth } from "@/frontend/firebaseConfig";
 
 export default function AnimatedSignUpScreen() {
   const router = useRouter();
@@ -290,11 +292,45 @@ export default function AnimatedSignUpScreen() {
       return;
     }
 
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      setIsLoading(true);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password,
+      );
+
+      await updateProfile(userCredential.user, {
+        displayName: name.trim(),
+      });
+
       router.push("/verification");
-    }, 1500);
+    } catch (error: any) {
+      const code = error?.code;
+      if (code === "auth/email-already-in-use") {
+        setErrors((prev) => ({
+          ...prev,
+          email: "This email is already registered",
+        }));
+        triggerShake(0);
+      } else if (code === "auth/invalid-email") {
+        setErrors((prev) => ({ ...prev, email: "Invalid email address" }));
+        triggerShake(0);
+      } else if (code === "auth/weak-password") {
+        setErrors((prev) => ({
+          ...prev,
+          password: "Password should be at least 6 characters",
+        }));
+        triggerShake(3);
+      } else {
+        setErrors((prev) => ({
+          ...prev,
+          email: "Signup failed. Please try again.",
+        }));
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
