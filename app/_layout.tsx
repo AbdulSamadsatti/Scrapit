@@ -1,4 +1,8 @@
-import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeProvider } from "@react-navigation/native";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider as NavigationThemeProvider,
+} from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
@@ -22,7 +26,6 @@ export default function RootLayout() {
             <Stack.Screen name="sign-up" />
             <Stack.Screen name="verification" />
             <Stack.Screen name="forgot-password" />
-            <Stack.Screen name="verification-forgot" />
             <Stack.Screen name="reset-password" />
             <Stack.Screen name="home" />
             <Stack.Screen name="category-details" />

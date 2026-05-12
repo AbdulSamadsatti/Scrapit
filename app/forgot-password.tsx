@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "@/frontend/firebaseConfig";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -18,17 +20,11 @@ import { CustomButton } from "@/components/ui/CustomButton";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const [phone, setPhone] = useState("");
-  const [phoneError, setPhoneError] = useState("");
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
-  const [authError, setAuthError] = useState("");
-
-  // Shake animation value
-  const shakeAnim = useRef(new Animated.Value(0)).current;
 
   // Animation values
   const cardScale = useRef(new Animated.Value(0.9)).current;
@@ -39,7 +35,7 @@ export default function ForgotPasswordScreen() {
   const formTranslateY = useRef(new Animated.Value(30)).current;
 
   const inputAnims = useRef([
-    new Animated.Value(-50), // Phone Input
+    new Animated.Value(-50), // Email Input
     new Animated.Value(-50), // Reset Button
     new Animated.Value(0), // Back link opacity
   ]).current;
@@ -132,66 +128,39 @@ export default function ForgotPasswordScreen() {
     inputAnims,
   ]);
 
-  const handlePhoneChange = (text: string) => {
-    let digits = text.replace(/\D/g, "");
-    if (digits.startsWith("92")) digits = digits.slice(2);
-    else if (digits.startsWith("0")) digits = digits.slice(1);
-    digits = digits.slice(0, 10);
-    const formattedPhone = digits.length > 0 ? "+92 " + digits : "";
-    setPhone(formattedPhone);
-
-    // Show error message and shake if user is typing invalid Pakistani mobile number
-    if (digits.length > 0 && digits[0] !== "3") {
-      setPhoneError("Invalid Pakistani mobile number - must start with 3");
-      triggerShake(); // Shake the phone input field immediately
-    } else {
-      setPhoneError("");
-    }
-  };
-
-  const handlePhoneBlur = () => {
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length > 0) {
-      if (cleanPhone.length !== 12 || cleanPhone[2] !== "3") {
-        setPhoneError("Invalid Pakistani phone number");
-        triggerShake();
-      } else {
-        setPhoneError("");
-      }
-    }
-  };
-
   const handleResetPassword = async () => {
     setEmailError("");
-    setPhoneError("");
-    setAuthError("");
     setSuccessMessage("");
-    let hasError = false;
 
-    if (!email.trim()) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
       setEmailError("Email is required");
-      hasError = true;
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      setEmailError("Invalid email format");
-      hasError = true;
-    }
-
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (!phone || cleanPhone.length !== 12 || cleanPhone[2] !== "3") {
-      setPhoneError("Valid Pakistani phone number is required");
       triggerShake();
-      hasError = true;
+      return;
     }
-
-    if (hasError) return;
+    if (!/\S+@\S+\.\S+/.test(trimmedEmail)) {
+      setEmailError("Invalid email format");
+      triggerShake();
+      return;
+    }
 
     setIsLoading(true);
-    // Simulate reset delay
-    setTimeout(() => {
-      console.log("Simulated password reset email sent");
+    try {
+      await sendPasswordResetEmail(auth, trimmedEmail);
       setSuccessMessage("Password reset email sent! Please check your inbox.");
+    } catch (error: any) {
+      const code = error?.code;
+      if (code === "auth/user-not-found") {
+        setEmailError("No account found with this email");
+      } else if (code === "auth/invalid-email") {
+        setEmailError("Invalid email address");
+      } else {
+        setEmailError("Something went wrong. Try again.");
+      }
+      triggerShake();
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -284,54 +253,15 @@ export default function ForgotPasswordScreen() {
             <Text style={styles.errorText}>{emailError}</Text>
           ) : null}
 
-          {/* Phone Input */}
-          <Animated.View
-            style={[
-              styles.inputWrapper,
-              {
-                transform: [
-                  { translateX: inputAnims[0] },
-                  { translateX: shakeAnim },
-                ],
-                marginBottom: 15,
-              },
-            ]}
-          >
-            <Ionicons
-              name="call-outline"
-              size={20}
-              color="#6B9A9C"
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={[
-                styles.input,
-                focusedInput === "phone" && styles.inputFocused,
-                phoneError ? styles.inputError : null,
-              ]}
-              placeholder="Phone No. (+92 3XXXXXXXXX)"
-              value={phone}
-              onChangeText={handlePhoneChange}
-              onFocus={() => setFocusedInput("phone")}
-              onBlur={() => {
-                setFocusedInput(null);
-                handlePhoneBlur();
-              }}
-              placeholderTextColor="#8F8F8F"
-              keyboardType="phone-pad"
-              maxLength={14}
-            />
-          </Animated.View>
-          {phoneError ? (
-            <Text style={styles.errorText}>{phoneError}</Text>
-          ) : null}
-
           {successMessage ? (
-            <Text style={[styles.successText, { textAlign: 'center', marginBottom: 10 }]}>{successMessage}</Text>
-          ) : null}
-
-          {authError ? (
-            <Text style={[styles.errorText, { textAlign: 'center', marginBottom: 10 }]}>{authError}</Text>
+            <Text
+              style={[
+                styles.successText,
+                { textAlign: "center", marginBottom: 10 },
+              ]}
+            >
+              {successMessage}
+            </Text>
           ) : null}
 
           {/* Reset Password Button */}
