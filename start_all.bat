@@ -16,7 +16,13 @@ echo Launching Mobile App (Expo)...
 if exist frontend (
   cd frontend
 ) else (
-  cd scrapit
+  if exist scrapit (
+    cd scrapit
+  ) else (
+    echo Neither "frontend" nor "scrapit" directory was found.
+    exit /b 1
+  )
+
 )
 set REACT_NATIVE_PACKAGER_HOSTNAME=%MY_IP%
 npx expo start --lan
