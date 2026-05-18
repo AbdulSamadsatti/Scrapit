@@ -1,0 +1,1 @@
+﻿components/SettingsScreen.tsx(877,29): error TS2339: Property 'headerLogoContainer' does not exist on type '{ container: { flex: number; backgroundColor: string; }; header: { flexDirection: "row"; alignItems: "center"; justifyContent: "space-between"; paddingHorizontal: number; paddingVertical: number; }; ... 86 more ...; headerLogo: { ...; }; }'.
