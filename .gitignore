@@ -1,12 +1,4 @@
-.env
-.env*.local
-.venv/
-__pycache__/
-*.py[cod]
-.DS_Store
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # dependencies
 node_modules/
@@ -34,8 +26,12 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# certificates
+# macOS
+.DS_Store
 *.pem
+
+# local env files
+.env*.local
 
 # typescript
 *.tsbuildinfo
@@ -45,3 +41,4 @@ app-example
 # generated native folders
 /ios
 /android
+.env
