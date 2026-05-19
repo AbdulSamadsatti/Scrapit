@@ -22,6 +22,8 @@ import InfinityLoader from "@/components/ui/InfinityLoader";
 import { SearchBar } from "@/components/ui/search-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCart } from "@/contexts/CartContext";
+import JobsList from "@/components/JobsList";
+import { getJobs, Job } from "@/services/jobsApi";
 import {
   Home,
   ShoppingCart,
@@ -177,6 +179,10 @@ export default function HomeScreen() {
     date: "All",
     time: "Any Time",
   });
+  const [liveJobs, setLiveJobs] = useState<Job[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobsError, setJobsError] = useState<string | null>(null);
+
   const scrollY = useRef(new Animated.Value(0)).current;
   const categoriesAnim = useRef(new Animated.Value(0)).current;
   const trendingAnim = useRef(new Animated.Value(0)).current;
@@ -288,6 +294,30 @@ export default function HomeScreen() {
 
       return matchesSearch && matchesCategory;
     });
+  }, [searchQuery, selectedCategory]);
+
+  useEffect(() => {
+    if (selectedCategory === "Jobs") {
+      const fetchJobsData = async () => {
+        setJobsLoading(true);
+        setJobsError(null);
+        try {
+          const query = searchQuery.trim() || "developer";
+          const data = await getJobs(query);
+          setLiveJobs(data);
+        } catch (e) {
+          setJobsError((e as Error).message);
+        } finally {
+          setJobsLoading(false);
+        }
+      };
+
+      const delayDebounceFn = setTimeout(() => {
+        fetchJobsData();
+      }, 500);
+
+      return () => clearTimeout(delayDebounceFn);
+    }
   }, [searchQuery, selectedCategory]);
 
   useEffect(() => {
@@ -811,16 +841,27 @@ export default function HomeScreen() {
             contentContainerStyle={styles.categoriesList}
           />
 
-          {/* Trending Now Section */}
+          {/* Trending / Jobs Section */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Trending Now</Text>
+            <Text style={styles.sectionTitle}>
+              {selectedCategory === "Jobs" ? "Available Jobs" : "Trending Now"}
+            </Text>
             <TouchableOpacity activeOpacity={0.7}>
               <Text style={styles.seeMore}>See more {">"}</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.trendingGrid}>
-            {filteredTrendingItems.map((item, index) => (
+          {selectedCategory === "Jobs" ? (
+            <View style={{ paddingHorizontal: 16 }}>
+              {jobsError ? (
+                <Text style={{ color: "red", padding: 20 }}>Error: {jobsError}</Text>
+              ) : (
+                <JobsList jobs={liveJobs} loading={jobsLoading} />
+              )}
+            </View>
+          ) : (
+            <View style={styles.trendingGrid}>
+              {filteredTrendingItems.map((item, index) => (
               <React.Fragment key={item.id}>
                 {renderTrendingItem({ item, index })}
               </React.Fragment>
@@ -831,7 +872,8 @@ export default function HomeScreen() {
                 <Text style={styles.noResultsText}>No items found</Text>
               </View>
             )}
-          </View>
+            </View>
+          )}
         </Animated.View>
       </Animated.ScrollView>
 

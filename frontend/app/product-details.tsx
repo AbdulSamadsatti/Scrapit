@@ -29,6 +29,7 @@ export default function ProductDetailsScreen() {
   const postedDate = (params.postedDate as string) || "New";
   const category = (params.category as string) || "All";
   const descriptionParam = (params.description as string) || "";
+  const linkParam = (params.link as string) || "";
 
   const formatPrice = (p: string) =>
     `Rs ${(p || "").replace(/^(rs|RS)\s*/i, "")}`;
@@ -151,14 +152,29 @@ export default function ProductDetailsScreen() {
           </View>
 
           <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              activeOpacity={0.85}
-              onPress={() => addToCart(itemPayload)}
-            >
-              <Ionicons name="cart" size={20} color="#fff" />
-              <Text style={styles.primaryButtonText}>Add to Cart</Text>
-            </TouchableOpacity>
+            {category === "Jobs" && linkParam ? (
+              <TouchableOpacity
+                style={styles.primaryButton}
+                activeOpacity={0.85}
+                onPress={() => {
+                  import('react-native').then(({ Linking }) => {
+                    Linking.openURL(linkParam).catch(err => console.error("Couldn't load page", err));
+                  });
+                }}
+              >
+                <Ionicons name="open-outline" size={20} color="#fff" />
+                <Text style={styles.primaryButtonText}>Apply Now</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.primaryButton}
+                activeOpacity={0.85}
+                onPress={() => addToCart(itemPayload)}
+              >
+                <Ionicons name="cart" size={20} color="#fff" />
+                <Text style={styles.primaryButtonText}>Add to Cart</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[
                 styles.secondaryButton,
