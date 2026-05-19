@@ -7,25 +7,74 @@ Baad mein: sirf search_in_db() implement karo — baaki same rahega.
 import logging
 from typing import Dict, Any, List
 
+from sqlalchemy.exc import IntegrityError
+from app.database import SessionLocal
+from app.models import JobListing
+
 logger = logging.getLogger(__name__)
 
 
-# ── DB stubs (implement when DB is ready) ─────────────────────────
+# ── DB stubs ki jagah yeh real functions ──────────────────────────
 
 def search_in_db(query: str, limit: int = 30) -> List[Dict]:
-    """
-    TODO — Firebase/MongoDB se jobs fetch karo.
-    Ab empty list return karta hai (DB nahi hai).
-    """
-    return []
+    """PostgreSQL se cached jobs fetch karo."""
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(JobListing)
+            .filter(
+                JobListing.title.ilike(f"%{query}%") |
+                JobListing.description.ilike(f"%{query}%")
+            )
+            .order_by(JobListing.scraped_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "title":       r.title,
+                "company":     r.company,
+                "location":    r.location,
+                "description": r.description,
+                "salary":      r.salary,
+                "apply_link":  r.apply_link,
+                "logo":        r.logo,
+                "source":      r.source,
+                "posted_at":   r.posted_at,
+            }
+            for r in rows
+        ]
+    finally:
+        db.close()
 
 
 def save_to_db(jobs: List[Dict]) -> None:
-    """
-    TODO — scraped jobs DB mein save karo.
-    Ab kuch nahi karta.
-    """
-    pass
+    """Scraped jobs PostgreSQL mein save karo — duplicates ignore."""
+    db = SessionLocal()
+    saved = 0
+    try:
+        for j in jobs:
+            row = JobListing(
+                title       = j.get("title", "")[:500],
+                company     = j.get("company", "")[:255],
+                location    = j.get("location", "")[:300],
+                description = j.get("description", ""),
+                salary      = j.get("salary", "")[:200],
+                apply_link  = j.get("apply_link") or j.get("link", ""),
+                logo        = j.get("logo") or j.get("image", ""),
+                source      = j.get("source", "")[:100],
+                posted_at   = j.get("posted_at") or j.get("posted_date", ""),
+            )
+            db.add(row)
+            try:
+                db.commit()
+                saved += 1
+            except IntegrityError:
+                db.rollback()   # Duplicate — silently skip
+    finally:
+        db.close()
+    logger.info(f"[DB] {saved}/{len(jobs)} jobs saved.")
+
 
 
 # ── Main search function ──────────────────────────────────────────

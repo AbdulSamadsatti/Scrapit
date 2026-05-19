@@ -361,3 +361,24 @@ class SavedItem(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     item_id = Column(Integer, ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
+class JobListing(Base):
+    __tablename__ = "job_listings"
+    __table_args__ = (
+        UniqueConstraint("title", "company", "source", 
+                         name="unique_job_per_source"),
+    )
+    id          = Column(Integer, primary_key=True, index=True)
+    title       = Column(String(500), nullable=False, index=True)
+    company     = Column(String(255), index=True)
+    location    = Column(String(300), index=True)
+    description = Column(Text)
+    salary      = Column(String(200))
+    apply_link  = Column(Text)
+    logo        = Column(Text)
+    source      = Column(String(100), index=True)
+    posted_at   = Column(String(100))
+    scraped_at  = Column(DateTime, nullable=False, 
+                         server_default=func.now(), index=True)
+
