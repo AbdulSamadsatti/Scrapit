@@ -16,17 +16,62 @@ from scraping_engine.core.runner import run_all_scrapers
 from scraping_engine.core.scheduler import start_scheduler
 from scraping_engine.search_services import search_jobs
 
+# Database imports
+from app.database import Base, SessionLocal, engine
+from app import models
+from app.routes import (
+    users,
+    domains,
+    websites,
+    items,
+    products,
+    raw_scraped_products,
+    scraper as db_scraper,
+    favorites,
+    chatbot as db_chatbot,
+    search_history,
+)
+
 logger = logging.getLogger(__name__)
+
+
+def seed_domains():
+    domains_data = [
+        ("ecommerce", "E-commerce", "Products, prices, categories, availability, and offers."),
+        ("real_estate", "Real Estate", "Properties for sale or rent."),
+        ("jobs", "Jobs", "Job posts, companies, salaries, and work locations."),
+        ("flights_travel", "Flights & Travel", "Flights, hotels, packages, and travel offers."),
+        ("automobiles", "Automobiles", "Cars, bikes, and vehicle listings."),
+    ]
+
+    db = SessionLocal()
+    try:
+        for code, name, description in domains_data:
+            existing = db.query(models.Domain).filter(models.Domain.code == code).first()
+            if existing:
+                continue
+            db.add(models.Domain(code=code, name=name, description=description))
+        db.commit()
+    finally:
+        db.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialize DB tables and seed domains
+    try:
+        Base.metadata.create_all(bind=engine)
+        seed_domains()
+        logger.info("Database initialized and seeded successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+
     scheduler = start_scheduler(interval_minutes=10)
     yield
     scheduler.shutdown()
 
 
-app = FastAPI(title="ScrapBot API", lifespan=lifespan)
+app = FastAPI(title="ScrapIt Unified API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,6 +80,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include Database API Routers
+app.include_router(users.router)
+app.include_router(domains.router)
+app.include_router(websites.router)
+app.include_router(items.router)
+app.include_router(products.router)
+app.include_router(raw_scraped_products.router)
+app.include_router(db_scraper.router)
+app.include_router(favorites.router)
+app.include_router(db_chatbot.router)
+app.include_router(search_history.router)
+
 
 
 # ── Chat (unchanged) ──────────────────────────────────────────────
