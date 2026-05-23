@@ -365,20 +365,20 @@ class SavedItem(Base):
 
 class JobListing(Base):
     __tablename__ = "job_listings"
-    __table_args__ = (
-        UniqueConstraint("title", "company", "source", 
-                         name="unique_job_per_source"),
-    )
+
     id          = Column(Integer, primary_key=True, index=True)
-    title       = Column(String(500), nullable=False, index=True)
-    company     = Column(String(255), index=True)
-    location    = Column(String(300), index=True)
-    description = Column(Text)
-    salary      = Column(String(200))
-    apply_link  = Column(Text)
-    logo        = Column(Text)
-    source      = Column(String(100), index=True)
-    posted_at   = Column(String(100))
-    scraped_at  = Column(DateTime, nullable=False, 
-                         server_default=func.now(), index=True)
+    query       = Column(String(255), nullable=False, index=True)
+    title       = Column(String(500), nullable=False, default="")
+    company     = Column(String(255), nullable=False, default="")
+    location    = Column(String(255), nullable=False, default="")
+    salary      = Column(String(255), nullable=False, default="")
+    description = Column(Text, nullable=False, default="")
+    snippet     = Column(Text, nullable=False, default="")
+    logo        = Column(Text, nullable=False, default="")
+    banner      = Column(Text, nullable=False, default="")
+    apply_link  = Column(Text, nullable=False, default="")
+    source      = Column(String(100), nullable=False, default="")
+    posted_at   = Column(String(100), nullable=False, default="")
+    scraped_at  = Column(DateTime, server_default=func.now(), nullable=False)
+    expires_at  = Column(DateTime, nullable=True)
 

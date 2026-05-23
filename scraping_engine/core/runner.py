@@ -22,7 +22,7 @@ from typing import Dict, Any
 logger = logging.getLogger(__name__)
 
 
-def run_all_scrapers(query: str, max_jobs_per_site: int = 10) -> Dict[str, Any]:
+def run_all_scrapers(query: str, max_jobs_per_site: int = 25) -> Dict[str, Any]:
     """
     Run all scrapers. Google SERP in parallel thread,
     Playwright scrapers sequentially (thread-safe).
@@ -49,7 +49,7 @@ def run_all_scrapers(query: str, max_jobs_per_site: int = 10) -> Dict[str, Any]:
     def _run_google():
         nonlocal google_result
         try:
-            google_result = scrape_google_jobs(query, max_jobs=max_jobs_per_site)
+            google_result = scrape_google_jobs(query, max_jobs=min(max_jobs_per_site, 5))
             logger.info(f"[Runner] google_jobs => {google_result.get('count', 0)} jobs")
         except Exception as e:
             logger.error(f"[Runner] google_jobs failed: {e}")

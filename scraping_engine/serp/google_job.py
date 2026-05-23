@@ -4,6 +4,7 @@ Step 1: SERP API se job URLs + basic data discover karo
 Step 2: Playwright se actual job page pe ja ke full data scrape karo
 """
 import logging
+import urllib.parse
 from typing import List, Dict, Any, Optional
 from serpapi import GoogleSearch
 
@@ -11,6 +12,20 @@ from scraping_engine.config import SERP_API_KEY
 from scraping_engine.engine.browser import BrowserManager
 
 logger = logging.getLogger(__name__)
+
+
+def unwrap_google_url(url: str) -> str:
+    if not url:
+        return ""
+    # If the URL is redirecting through google, unwrap it
+    if "google.com/url?" in url or "google.co/url?" in url:
+        parsed = urllib.parse.urlparse(url)
+        qs = urllib.parse.parse_qs(parsed.query)
+        if "q" in qs:
+            return qs["q"][0]
+        if "url" in qs:
+            return qs["url"][0]
+    return url
 
 
 # ---------------------------------------------------------------------------
@@ -66,14 +81,27 @@ def discover_jobs_via_serp(
         if not direct_url and apply_options:
             direct_url = apply_options[0].get("link", "")
 
+        # Unwrap google redirect links to actual target
+        direct_url = unwrap_google_url(direct_url)
+
+        # Grab salary if available in search discovery metadata
+        salary = job.get("salary") or ""
+        if not salary:
+            extensions = job.get("detected_extensions", {}) or {}
+            salary = extensions.get("salary") or ""
+
         discovered.append({
             "title":       job.get("title", "N/A"),
             "company":     job.get("company_name", "N/A"),
             "location":    job.get("location", "N/A"),
             "description": job.get("description", ""),   # short snippet
+            "logo":        job.get("thumbnail", ""),
             "thumbnail":   job.get("thumbnail", ""),
+            "banner":      "",
+            "salary":      salary,
             "job_id":      job.get("job_id", ""),
             "apply_options": apply_options,
+            "apply_link":  direct_url,
             "direct_url":  direct_url,
             "source":      "google_jobs",
             "enriched":    False,   # ab tak full scrape nahi hua
@@ -146,12 +174,33 @@ def _enrich_single_job(page, job: Dict[str, Any]) -> Dict[str, Any]:
         posted_date      = safe_text(selectors["posted_date"])
         salary           = safe_text(selectors["salary"])
 
+        # Visual banner extraction
+        banner = ""
+        banner_selectors = [
+            "img.feed-shared-image__image",
+            "img.update-components-image__image",
+            "img.job-ad-image",
+            "img.company-ad",
+            "div.job-ad img",
+            "img[src*='job-ad']",
+            "img[class*='ad-image']"
+        ]
+        for sel in banner_selectors:
+            loc = page.locator(sel)
+            if loc.count() > 0:
+                src = loc.first.get_attribute("src") or ""
+                if src and not any(k in src.lower() for k in ["pixel", "tracker", "blank", "placeholder"]):
+                    banner = src
+                    break
+
         if full_description:
             job["description"] = full_description
         if posted_date:
             job["posted_date"] = posted_date
         if salary:
             job["salary"] = salary
+        if banner:
+            job["banner"] = banner
 
         job["enriched"] = True
         logger.info(f"[Enrich] ✅ Done: {job['title']} @ {job['company']}")

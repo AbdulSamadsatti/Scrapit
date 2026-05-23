@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Animated,
   Dimensions,
@@ -25,9 +25,11 @@ import { SearchBar } from "@/components/ui/search-bar";
 import { InteractiveMenu } from "@/components/ui/modern-mobile-menu";
 import { Sidebar } from "@/components/ui/Sidebar";
 import LottieHamburger from "@/components/ui/Hamburger";
-import { StatusBar } from "react-native";
+import { StatusBar, ScrollView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCart } from "@/contexts/CartContext";
+import JobsList from "@/components/JobsList";
+import { getJobs, Job } from "@/services/jobsApi";
 
 const { width } = Dimensions.get("window");
 
@@ -368,6 +370,10 @@ export default function CategoryDetails() {
     date: "All",
     time: "Any Time",
   });
+  const [liveJobs, setLiveJobs] = useState<Job[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobsRefreshing, setJobsRefreshing] = useState(false);
+  const [jobsError, setJobsError] = useState<string | null>(null);
 
   const filterPanelAnim = useRef(new Animated.Value(0)).current;
 
@@ -392,6 +398,38 @@ export default function CategoryDetails() {
     filterPanelAnim,
     getFilterPanelHeight,
   ]);
+
+  const fetchJobsData = useCallback(async (forceRefresh = false) => {
+    if (!forceRefresh) {
+      setJobsLoading(true);
+    } else {
+      setJobsRefreshing(true);
+    }
+    setJobsError(null);
+    try {
+      const query = searchQuery.trim() || "software engineer";
+      const data = await getJobs(query, 25, false, forceRefresh);
+      setLiveJobs(data);
+    } catch (e) {
+      setJobsError((e as Error).message);
+    } finally {
+      if (!forceRefresh) {
+        setJobsLoading(false);
+      } else {
+        setJobsRefreshing(false);
+      }
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (selectedCategory === "Jobs") {
+      const delayDebounceFn = setTimeout(() => {
+        fetchJobsData();
+      }, 500);
+
+      return () => clearTimeout(delayDebounceFn);
+    }
+  }, [searchQuery, selectedCategory, fetchJobsData]);
 
   const FILTER_OPTIONS = {
     price: ["All", "Low to High", "High to Low"],
@@ -1105,24 +1143,34 @@ export default function CategoryDetails() {
       </View>
 
       {/* Items List/Grid */}
-      <FlatList
-        data={filteredItems}
-        renderItem={viewMode === "grid" ? renderGridItem : renderListItem}
-        keyExtractor={(item) => item.id}
-        numColumns={viewMode === "grid" ? 2 : 1}
-        key={viewMode}
-        contentContainerStyle={styles.itemsList}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={64} color="#CCC" />
-            <Text style={styles.emptyStateTitle}>No Items Found</Text>
-            <Text style={styles.emptyStateText}>
-              Try adjusting your search terms
-            </Text>
-          </View>
-        }
-      />
+      {selectedCategory === "Jobs" ? (
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}>
+          {jobsError ? (
+            <Text style={{ color: "red", padding: 20 }}>Error: {jobsError}</Text>
+          ) : (
+            <JobsList jobs={liveJobs} loading={jobsLoading} externalRefreshing={jobsRefreshing} onRefresh={() => fetchJobsData(true)} />
+          )}
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={filteredItems}
+          renderItem={viewMode === "grid" ? renderGridItem : renderListItem}
+          keyExtractor={(item) => item.id}
+          numColumns={viewMode === "grid" ? 2 : 1}
+          key={viewMode}
+          contentContainerStyle={styles.itemsList}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={64} color="#CCC" />
+              <Text style={styles.emptyStateTitle}>No Items Found</Text>
+              <Text style={styles.emptyStateText}>
+                Try adjusting your search terms
+              </Text>
+            </View>
+          }
+        />
+      )}
 
       <InteractiveMenu items={menuItems} onItemPress={handleMenuItemPress} />
     </SafeAreaView>

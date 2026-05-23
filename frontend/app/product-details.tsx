@@ -1,451 +1,577 @@
-import React, { useRef } from "react";
+/**
+ * product-details.tsx
+ *
+ * Two modes in one screen:
+ *   category === "Jobs"  →  Professional Job Detail (LinkedIn-style)
+ *   everything else      →  Original product detail (unchanged)
+ */
+import React, { useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  Animated,
+  StyleSheet, View, Text, TouchableOpacity,
+  Animated, Image, Linking, Alert, ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCart } from "../contexts/CartContext";
 
-export default function ProductDetailsScreen() {
-  const router = useRouter();
-  const params = useLocalSearchParams();
-  const { addToCart, toggleLike, isLiked } = useCart();
-  const scrollY = useRef(new Animated.Value(0)).current;
+// ── Source config ─────────────────────────────────────────────────
+const SOURCE_COLORS: Record<string, string> = {
+  linkedin: "#0A66C2",
+  rozee: "#C8102E",
+  indeed: "#2557A7",
+  google_jobs: "#4285F4",
+};
+const SOURCE_LABELS: Record<string, string> = {
+  linkedin: "LinkedIn",
+  rozee: "Rozee.pk",
+  indeed: "Indeed",
+  google_jobs: "Google Jobs",
+};
 
-  const id = (params.itemId as string) || (params.id as string) || "";
-  const title = (params.title as string) || "Product";
-  const rawPrice = (params.price as string) || "0";
-  const image =
-    (params.image as string) ||
-    "https://images.unsplash.com/photo-1553275100-834bb1406c43?q=80&w=800&auto=format&fit=crop";
-  const location = (params.location as string) || "Available";
-  const type = (params.type as string) || "General";
-  const postedDate = (params.postedDate as string) || "New";
-  const category = (params.category as string) || "All";
-  const descriptionParam = (params.description as string) || "";
-  const linkParam = (params.link as string) || "";
+// ── Salary cleaner ────────────────────────────────────────────────
+function cleanSalary(raw: string): string {
+  if (!raw?.trim()) return "Salary not disclosed";
+  const s = raw.trim();
+  const blocked = ["google_jobs", "google", "linkedin", "rozee", "indeed", "rozee.pk", "n/a", "-", ""];
+  if (blocked.includes(s.toLowerCase())) return "Salary not disclosed";
+  if (!/\d/.test(s)) return "Salary not disclosed";
+  return /^(rs\.?|pkr|usd|\$)/i.test(s) ? s : `Rs ${s}`;
+}
+
+// ── Company avatar ────────────────────────────────────────────────
+function CompanyAvatar({ name, source, size = 100 }:
+  { name: string; source: string; size?: number }) {
+  const color = SOURCE_COLORS[source] || "#1E7C7E";
+  const initials = (name || "?").split(" ").slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() || "").join("") || "?";
+  return (
+    <View style={[JD.avatarBox, {
+      width: size, height: size, borderRadius: size * 0.18,
+      backgroundColor: color + "18", borderColor: color + "55",
+    }]}>
+      <Text style={[JD.avatarTxt, { color, fontSize: size * 0.3 }]}>{initials}</Text>
+    </View>
+  );
+}
+
+// ── Source badge ──────────────────────────────────────────────────
+function SourceBadge({ source, label }: { source: string; label: string }) {
+  const c = SOURCE_COLORS[source] || "#777";
+  if (!label) return null;
+  return (
+    <View style={[JD.badge, { backgroundColor: c + "14", borderColor: c + "55" }]}>
+      <View style={[JD.badgeDot, { backgroundColor: c }]} />
+      <Text style={[JD.badgeTxt, { color: c }]}>{label}</Text>
+    </View>
+  );
+}
+
+// ── Divider ───────────────────────────────────────────────────────
+function Divider() {
+  return <View style={{ height: 1, backgroundColor: "#F0F0F0", marginVertical: 12 }} />;
+}
+
+// ── Detail row ────────────────────────────────────────────────────
+function DetailRow({ icon, label, value }: { icon: any; label: string; value: string }) {
+  if (!value) return null;
+  return (
+    <View style={JD.detailRow}>
+      <View style={JD.detailLeft}>
+        <Ionicons name={icon} size={16} color="#1E7C7E" />
+        <Text style={JD.detailLabel}>{label}</Text>
+      </View>
+      <Text style={JD.detailValue} numberOfLines={2}>{value}</Text>
+    </View>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  JOB DETAIL — full screen for a single job listing
+// ════════════════════════════════════════════════════════════════════
+function JobDetail({
+  title, company, location, salary, description, logo, applyLink,
+  source, sourceLabel, postedDate, banner, onBack, onLike, liked,
+}: {
+  title: string; company: string; location: string; salary: string;
+  description: string; logo: string; applyLink: string;
+  source: string; sourceLabel: string; postedDate: string; banner: string;
+  onBack: () => void; onLike: () => void; liked: boolean;
+}) {
+  const [logoErr, setLogoErr] = useState(false);
+  const [bannerErr, setBannerErr] = useState(false);
+  const showLogo = !!logo && /^https?:/.test(logo) && !logoErr;
+  const showBanner = !!banner && /^https?:/.test(banner) && !bannerErr;
+  const accentColor = SOURCE_COLORS[source] || "#1E7C7E";
+
+  function handleApply() {
+    if (!applyLink) { Alert.alert("No Link", "Apply link is not available."); return; }
+    Linking.openURL(applyLink).catch(() => Alert.alert("Error", "Could not open link."));
+  }
+
+  // Split description into paragraphs for nice rendering
+  const paragraphs = description
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#F5F8F9" }}>
+
+      {/* ── Header ── */}
+      <LinearGradient
+        colors={["#031d1e", "#063537", "#0D5A5B", "#1E7C7E"]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={S.header}
+      >
+        <View style={S.headerRow}>
+          <TouchableOpacity onPress={onBack} style={S.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={S.headerTitle}>Job Details</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </LinearGradient>
+
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={false}>
+
+        {/* ── Logo card ── */}
+        <View style={JD.logoCard}>
+          {showLogo ? (
+            <Image source={{ uri: logo }} style={JD.logoImg}
+              resizeMode="contain" onError={() => setLogoErr(true)} />
+          ) : (
+            <CompanyAvatar name={company || title} source={source} size={100} />
+          )}
+          {postedDate ? (
+            <View style={JD.postedBadge}>
+              <Ionicons name="time-outline" size={11} color="#fff" />
+              <Text style={JD.postedTxt}>{postedDate}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* ── Info card ── */}
+        <View style={S.card}>
+
+          {/* Source badge */}
+          {sourceLabel ? <SourceBadge source={source} label={sourceLabel} /> : null}
+
+          {/* Job title */}
+          <Text style={JD.jobTitle}>{title}</Text>
+
+          {/* Salary */}
+          <Text style={[JD.salaryText, { color: accentColor }]}>{salary}</Text>
+
+          <Divider />
+
+          {/* Details grid */}
+          <DetailRow icon="business-outline" label="Company" value={company} />
+          <DetailRow icon="location-outline" label="Location" value={location} />
+          {sourceLabel
+            ? <DetailRow icon="globe-outline" label="Source" value={sourceLabel} />
+            : null}
+
+          <Divider />
+
+          {/* Action buttons */}
+          <View style={JD.btnRow}>
+            <TouchableOpacity
+              style={[JD.applyBtn, !applyLink && JD.applyBtnDisabled]}
+              onPress={handleApply} activeOpacity={0.86} disabled={!applyLink}
+            >
+              <Ionicons name="open-outline" size={18} color="#fff" />
+              <Text style={JD.applyTxt}>Apply Now</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[JD.saveBtn, liked && JD.saveBtnLiked]}
+              onPress={onLike} activeOpacity={0.86}
+            >
+              <Ionicons
+                name={liked ? "heart" : "heart-outline"}
+                size={18}
+                color={liked ? "#E53935" : "#1E7C7E"}
+              />
+              <Text style={[JD.saveTxt, liked && { color: "#E53935" }]}>
+                {liked ? "Saved" : "Save Job"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ── Visual Banner Ad Flyer ── */}
+        {showBanner ? (
+          <View style={[PD.imgWrapper, { marginTop: 12, marginBottom: 0, height: 280, backgroundColor: "#fff", borderWidth: 1, borderColor: "#e0e0e0" }]}>
+            <Image source={{ uri: banner }} style={PD.img} resizeMode="contain" onError={() => setBannerErr(true)} />
+          </View>
+        ) : null}
+
+        {/* ── Description card ── */}
+        {description ? (
+          <View style={[S.card, { marginTop: 12 }]}>
+            <Text style={JD.sectionTitle}>Job Description</Text>
+            {paragraphs.length > 0 ? (
+              paragraphs.map((para, i) => (
+                <Text key={i} style={JD.descPara}>{para}</Text>
+              ))
+            ) : (
+              <Text style={JD.descPara}>{description}</Text>
+            )}
+          </View>
+        ) : null}
+
+        {/* ── View on source link ── */}
+        {applyLink ? (
+          <TouchableOpacity style={JD.extLink} onPress={handleApply}>
+            <Text style={JD.extLinkTxt}>
+              View full posting on {sourceLabel || "job site"} ↗
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  PRODUCT DETAIL — original product screen (unchanged logic)
+// ════════════════════════════════════════════════════════════════════
+function ProductDetail({
+  id, title, rawPrice, image, location, type, postedDate,
+  category, description, onBack,
+  addToCart, toggleLike, isLiked,
+}: any) {
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const liked = isLiked(id);
 
   const formatPrice = (p: string) =>
     `Rs ${(p || "").replace(/^(rs|RS)\s*/i, "")}`;
   const resolveImage = (u: string) =>
     u && /^https?:/.test(u)
       ? u
-      : "https://via.placeholder.com/800x600?text=Image";
-  const liked = isLiked(id);
-  const autoDescription =
-    descriptionParam ||
-    `${title} ${type} available in ${location}. Premium choice with reliable performance and modern design. Verified listing posted ${postedDate} with clear pricing and transparent details. Suitable for daily use and fits a wide range of requirements. Add to cart or like to keep track.`;
-  const highlights = [
-    "Trusted seller",
-    "Fast response",
-    "Secure payment",
-    "Quality checked",
-  ];
+      : "https://images.unsplash.com/photo-1553275100-834bb1406c43?q=80&w=800&auto=format&fit=crop";
 
-  const itemPayload = {
-    id,
-    title,
-    price: rawPrice,
-    image,
-    location,
-    type,
-    postedDate,
-    category,
-  };
+  const autoDescription = description ||
+    `${title} — ${type} available in ${location}. Posted ${postedDate}.`;
+
+  const highlights = ["Trusted seller", "Fast response", "Secure payment", "Quality checked"];
+  const itemPayload = { id, title, price: rawPrice, image, location, type, postedDate, category };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={S.container}>
       <LinearGradient
         colors={["#031d1e", "#063537", "#0D5A5B", "#1E7C7E"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.header}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+        style={S.header}
       >
-        <View style={styles.headerContent}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-            activeOpacity={0.8}
-          >
+        <View style={S.headerRow}>
+          <TouchableOpacity onPress={onBack} style={S.backBtn}>
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Product Details</Text>
-          <View style={styles.headerRight} />
+          <Text style={S.headerTitle}>Product Details</Text>
+          <View style={{ width: 40 }} />
         </View>
       </LinearGradient>
 
-      <Animated.ScrollView
-        style={styles.content}
+      <Animated.ScrollView style={{ flex: 1, padding: 16 }}
         showsVerticalScrollIndicator={false}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true },
+          { useNativeDriver: true }
         )}
         scrollEventThrottle={16}
       >
-        <View style={styles.imageWrapper}>
+        {/* Hero image */}
+        <View style={PD.imgWrapper}>
           <Animated.Image
-            source={{ uri: resolveImage(image as string) }}
-            style={[
-              styles.image,
-              {
-                transform: [
-                  {
-                    translateY: scrollY.interpolate({
-                      inputRange: [-100, 0, 300],
-                      outputRange: [20, 0, -50],
-                      extrapolateLeft: "extend",
-                      extrapolateRight: "clamp",
-                    }),
-                  },
-                  {
-                    scale: scrollY.interpolate({
-                      inputRange: [-120, 0],
-                      outputRange: [1.1, 1],
-                      extrapolateLeft: "extend",
-                      extrapolateRight: "clamp",
-                    }),
-                  },
-                ],
-              },
-            ]}
+            source={{ uri: resolveImage(image) }}
+            style={[PD.img, {
+              transform: [
+                { translateY: scrollY.interpolate({ inputRange: [-100, 0, 300], outputRange: [20, 0, -50], extrapolateLeft: "extend", extrapolateRight: "clamp" }) },
+                { scale: scrollY.interpolate({ inputRange: [-120, 0], outputRange: [1.1, 1], extrapolateLeft: "extend", extrapolateRight: "clamp" }) },
+              ]
+            }]}
             resizeMode="cover"
           />
-          <LinearGradient
-            colors={["rgba(0,0,0,0.0)", "rgba(0,0,0,0.25)"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.imageOverlay}
-          />
-          <View style={styles.imageBadge}>
-            <Text style={styles.imageBadgeText}>{postedDate}</Text>
+          <LinearGradient colors={["rgba(0,0,0,0.0)", "rgba(0,0,0,0.25)"]}
+            start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={PD.imgOverlay} />
+          <View style={PD.imgBadge}>
+            <Text style={PD.imgBadgeTxt}>{postedDate}</Text>
           </View>
         </View>
 
-        <View style={styles.infoCard}>
-          <View style={styles.titleRow}>
-            <Text style={styles.title} numberOfLines={2}>
-              {title}
-            </Text>
-          </View>
-          <Text style={styles.price}>{formatPrice(rawPrice)}</Text>
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Ionicons name="location-outline" size={18} color="#1E7C7E" />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {location}
-              </Text>
+        {/* Info */}
+        <View style={S.card}>
+          <Text style={PD.title} numberOfLines={2}>{title}</Text>
+          <Text style={PD.price}>{formatPrice(rawPrice)}</Text>
+          <View style={PD.metaRow}>
+            <View style={PD.metaItem}>
+              <Ionicons name="location-outline" size={16} color="#1E7C7E" />
+              <Text style={PD.metaTxt} numberOfLines={1}>{location}</Text>
             </View>
-            <View style={styles.metaItem}>
-              <Ionicons name="pricetag-outline" size={18} color="#1E7C7E" />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {type}
-              </Text>
+            <View style={PD.metaItem}>
+              <Ionicons name="pricetag-outline" size={16} color="#1E7C7E" />
+              <Text style={PD.metaTxt} numberOfLines={1}>{type}</Text>
             </View>
           </View>
-
-          <View style={styles.actionsRow}>
-            {category === "Jobs" && linkParam ? (
-              <TouchableOpacity
-                style={styles.primaryButton}
-                activeOpacity={0.85}
-                onPress={() => {
-                  import('react-native').then(({ Linking }) => {
-                    Linking.openURL(linkParam).catch(err => console.error("Couldn't load page", err));
-                  });
-                }}
-              >
-                <Ionicons name="open-outline" size={20} color="#fff" />
-                <Text style={styles.primaryButtonText}>Apply Now</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.primaryButton}
-                activeOpacity={0.85}
-                onPress={() => addToCart(itemPayload)}
-              >
-                <Ionicons name="cart" size={20} color="#fff" />
-                <Text style={styles.primaryButtonText}>Add to Cart</Text>
-              </TouchableOpacity>
-            )}
+          <View style={PD.actionsRow}>
+            <TouchableOpacity style={PD.primaryBtn} onPress={() => addToCart(itemPayload)}>
+              <Ionicons name="cart" size={20} color="#fff" />
+              <Text style={PD.primaryTxt}>Add to Cart</Text>
+            </TouchableOpacity>
             <TouchableOpacity
-              style={[
-                styles.secondaryButton,
-                liked && styles.secondaryButtonActive,
-              ]}
-              activeOpacity={0.85}
+              style={[PD.secondaryBtn, liked && PD.secondaryBtnActive]}
               onPress={() => toggleLike(itemPayload)}
             >
-              <Ionicons
-                name={liked ? "heart" : "heart-outline"}
-                size={20}
-                color={liked ? "#FF4B6E" : "#1E7C7E"}
-              />
-              <Text
-                style={[
-                  styles.secondaryButtonText,
-                  liked && styles.secondaryButtonTextActive,
-                ]}
-              >
+              <Ionicons name={liked ? "heart" : "heart-outline"} size={20}
+                color={liked ? "#FF4B6E" : "#1E7C7E"} />
+              <Text style={[PD.secondaryTxt, liked && PD.secondaryTxtActive]}>
                 {liked ? "Liked" : "Like"}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.descriptionCard}>
-          <Text style={styles.sectionTitle}>Description</Text>
-          <Text style={styles.descriptionText}>{autoDescription}</Text>
-          <View style={styles.chipsRow}>
+        {/* Description */}
+        <View style={[S.card, { marginTop: 12 }]}>
+          <Text style={PD.sectionTitle}>Description</Text>
+          <Text style={PD.descTxt}>{autoDescription}</Text>
+          <View style={PD.chipsRow}>
             {highlights.map((h) => (
-              <View key={h} style={styles.chip}>
-                <Ionicons name="checkmark-circle" size={16} color="#1E7C7E" />
-                <Text style={styles.chipText}>{h}</Text>
+              <View key={h} style={PD.chip}>
+                <Ionicons name="checkmark-circle" size={14} color="#1E7C7E" />
+                <Text style={PD.chipTxt}>{h}</Text>
               </View>
             ))}
           </View>
         </View>
 
-        <View style={styles.detailsCard}>
-          <Text style={styles.sectionTitle}>Details</Text>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Category</Text>
-            <Text style={styles.detailValue}>{category}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Posted</Text>
-            <Text style={styles.detailValue}>{postedDate}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Location</Text>
-            <Text style={styles.detailValue}>{location}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Type</Text>
-            <Text style={styles.detailValue}>{type}</Text>
-          </View>
+        {/* Details */}
+        <View style={[S.card, { marginTop: 12, marginBottom: 30 }]}>
+          <Text style={PD.sectionTitle}>Details</Text>
+          {[
+            ["Category", category],
+            ["Posted", postedDate],
+            ["Location", location],
+            ["Type", type],
+          ].map(([l, v]) => (
+            <View key={l} style={PD.detailRow}>
+              <Text style={PD.detailLabel}>{l}</Text>
+              <Text style={PD.detailValue}>{v}</Text>
+            </View>
+          ))}
         </View>
       </Animated.ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F8F9",
+// ════════════════════════════════════════════════════════════════════
+//  MAIN EXPORT — routes between Job and Product mode
+// ════════════════════════════════════════════════════════════════════
+export default function ProductDetailsScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const { addToCart, toggleLike, isLiked } = useCart();
+
+  const id = (params.itemId as string) || (params.id as string) || "";
+  const title = (params.title as string) || "Product";
+  const rawPrice = (params.price as string) || "";
+  const image = (params.image as string) || "";
+  const location = (params.location as string) || "Pakistan";
+  const type = (params.type as string) || "General";
+  const postedDate = (params.postedDate as string) || "";
+  const category = (params.category as string) || "All";
+  const description = (params.description as string) || "";
+  const linkParam = (params.link as string) || "";
+  const source = (params.source as string) || "";
+  const sourceLabelP = (params.source_label as string) || "";
+  const company = (params.company as string) || type;
+  const banner = (params.banner as string) || "";
+
+  const isJob = category === "Jobs";
+
+  if (isJob) {
+    return (
+      <JobDetail
+        title={title}
+        company={company}
+        location={location}
+        salary={cleanSalary(rawPrice)}
+        description={description}
+        logo={image}
+        applyLink={linkParam}
+        source={source}
+        sourceLabel={sourceLabelP || SOURCE_LABELS[source] || ""}
+        postedDate={postedDate}
+        banner={banner}
+        onBack={() => router.back()}
+        onLike={() => toggleLike({ id, title, price: rawPrice, image, location, type, postedDate, category, banner, link: linkParam, source, source_label: sourceLabelP })}
+        liked={isLiked(id)}
+      />
+    );
+  }
+
+  return (
+    <ProductDetail
+      id={id} title={title} rawPrice={rawPrice} image={image}
+      location={location} type={type} postedDate={postedDate}
+      category={category} description={description}
+      onBack={() => router.back()}
+      addToCart={addToCart} toggleLike={toggleLike} isLiked={isLiked}
+    />
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  STYLES
+// ════════════════════════════════════════════════════════════════════
+
+// Shared
+const S = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#F5F8F9" },
+  header: { paddingVertical: 12 },
+  headerRow: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", paddingHorizontal: 16
   },
-  header: {
-    paddingVertical: 12,
+  backBtn: { padding: 4 },
+  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
+  card: {
+    backgroundColor: "#fff", borderRadius: 16, padding: 16,
+    elevation: 2, shadowColor: "#000", shadowOpacity: 0.06,
+    shadowRadius: 8, shadowOffset: { width: 0, height: 2 }
   },
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
+});
+
+// Job Detail
+const JD = StyleSheet.create({
+  // logo card
+  logoCard: {
+    backgroundColor: "#fff", borderRadius: 16, alignItems: "center",
+    justifyContent: "center", paddingVertical: 32, marginBottom: 12,
+    position: "relative", elevation: 2, shadowColor: "#000",
+    shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }
   },
-  backButton: {
-    padding: 4,
+  logoImg: { width: 110, height: 110, borderRadius: 14, backgroundColor: "#f4f4f4" },
+  avatarBox: { alignItems: "center", justifyContent: "center", borderWidth: 1.5 },
+  avatarTxt: { fontWeight: "800" },
+  postedBadge: {
+    position: "absolute", bottom: 12, left: 12,
+    backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 4,
+    flexDirection: "row", alignItems: "center", gap: 4
   },
-  headerTitle: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "700",
+  postedTxt: { color: "#fff", fontSize: 11, fontWeight: "600" },
+
+  // source badge
+  badge: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    alignSelf: "flex-start", borderWidth: 1, borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 4, marginBottom: 10
   },
-  headerRight: {
-    width: 40,
-    height: 40,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  imageWrapper: {
-    height: 280,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#EAF6F7",
-    marginBottom: 16,
-    position: "relative",
-  },
-  image: {
-    width: "100%",
-    height: "100%",
-  },
-  imageOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 80,
-  },
-  imageBadge: {
-    position: "absolute",
-    bottom: 10,
-    left: 10,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  imageBadgeText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  infoCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 6,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#1F2937",
-  },
-  price: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#1E7C7E",
-    marginTop: 4,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 12,
-  },
-  metaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-  },
-  metaText: {
-    fontSize: 13,
-    color: "#6B7280",
-  },
-  actionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 16,
-    gap: 12,
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: "#1E7C7E",
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  primaryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  secondaryButton: {
-    flex: 1,
-    backgroundColor: "#EAF6F7",
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "#D6EEEF",
-  },
-  secondaryButtonActive: {
-    backgroundColor: "#FFEFF3",
-    borderColor: "#FFD4DE",
-  },
-  secondaryButtonText: {
-    color: "#1E7C7E",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  secondaryButtonTextActive: {
-    color: "#FF4B6E",
-  },
-  descriptionCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-  },
-  detailsCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#1F2937",
-    marginBottom: 10,
-  },
-  descriptionText: {
-    fontSize: 14,
-    color: "#374151",
-    lineHeight: 20,
-  },
-  chipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 12,
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#EAF6F7",
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#D6EEEF",
-  },
-  chipText: {
-    fontSize: 12,
-    color: "#1E7C7E",
-    fontWeight: "700",
-  },
+  badgeDot: { width: 6, height: 6, borderRadius: 3 },
+  badgeTxt: { fontSize: 11, fontWeight: "700" },
+
+  // text
+  jobTitle: { fontSize: 20, fontWeight: "800", color: "#1A1A2E", lineHeight: 26, marginBottom: 4 },
+  salaryText: { fontSize: 17, fontWeight: "700", marginBottom: 4 },
+  sectionTitle: { fontSize: 15, fontWeight: "700", color: "#1A1A2E", marginBottom: 10 },
+  descPara: { fontSize: 14, color: "#374151", lineHeight: 22, marginBottom: 8 },
+
+  // details
   detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "flex-start", paddingVertical: 9,
+    borderBottomWidth: 1, borderBottomColor: "#F0F0F0"
   },
-  detailLabel: {
-    fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "600",
-  },
+  detailLeft: { flexDirection: "row", alignItems: "center", gap: 6 },
+  detailLabel: { fontSize: 13, color: "#6B7280", fontWeight: "600" },
   detailValue: {
-    fontSize: 13,
-    color: "#1F2937",
-    fontWeight: "700",
+    fontSize: 13, color: "#1A1A2E", fontWeight: "700",
+    maxWidth: "55%", textAlign: "right"
   },
+
+  // buttons
+  btnRow: { flexDirection: "row", gap: 12, marginTop: 4 },
+  applyBtn: {
+    flex: 1, backgroundColor: "#1E7C7E", paddingVertical: 14,
+    borderRadius: 12, flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 8
+  },
+  applyBtnDisabled: { backgroundColor: "#9bb8b8" },
+  applyTxt: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  saveBtn: {
+    flex: 1, backgroundColor: "#EAF6F7", paddingVertical: 14,
+    borderRadius: 12, flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 8,
+    borderWidth: 1.5, borderColor: "#C3E8EA"
+  },
+  saveBtnLiked: { backgroundColor: "#FFF0F0", borderColor: "#FFB3B3" },
+  saveTxt: { fontSize: 15, fontWeight: "700", color: "#1E7C7E" },
+
+  // ext link
+  extLink: { alignItems: "center", paddingVertical: 14 },
+  extLinkTxt: {
+    color: "#1E7C7E", fontSize: 13, fontWeight: "600",
+    textDecorationLine: "underline"
+  },
+});
+
+// Product Detail
+const PD = StyleSheet.create({
+  imgWrapper: {
+    height: 260, borderRadius: 16, overflow: "hidden",
+    backgroundColor: "#EAF6F7", marginBottom: 12, position: "relative"
+  },
+  img: { width: "100%", height: "100%" },
+  imgOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, height: 70 },
+  imgBadge: {
+    position: "absolute", bottom: 10, left: 10,
+    backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 8,
+    paddingVertical: 4, borderRadius: 8
+  },
+  imgBadgeTxt: { color: "#fff", fontSize: 12, fontWeight: "600" },
+
+  title: { fontSize: 18, fontWeight: "800", color: "#1F2937", marginBottom: 4 },
+  price: { fontSize: 19, fontWeight: "800", color: "#1E7C7E", marginBottom: 12 },
+  metaRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1 },
+  metaTxt: { fontSize: 13, color: "#6B7280", flexShrink: 1 },
+  actionsRow: { flexDirection: "row", gap: 12, marginTop: 14 },
+
+  primaryBtn: {
+    flex: 1, backgroundColor: "#1E7C7E", paddingVertical: 14,
+    borderRadius: 10, flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 8
+  },
+  primaryTxt: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  secondaryBtn: {
+    flex: 1, backgroundColor: "#EAF6F7", paddingVertical: 14,
+    borderRadius: 10, flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 8, borderWidth: 1, borderColor: "#C3E8EA"
+  },
+  secondaryBtnActive: { backgroundColor: "#FFEFF3", borderColor: "#FFD4DE" },
+  secondaryTxt: { color: "#1E7C7E", fontSize: 15, fontWeight: "700" },
+  secondaryTxtActive: { color: "#FF4B6E" },
+
+  sectionTitle: { fontSize: 15, fontWeight: "700", color: "#1F2937", marginBottom: 8 },
+  descTxt: { fontSize: 14, color: "#374151", lineHeight: 21 },
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  chip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "#EAF6F7", borderRadius: 20, paddingHorizontal: 10,
+    paddingVertical: 6, borderWidth: 1, borderColor: "#C3E8EA"
+  },
+  chipTxt: { fontSize: 12, color: "#1E7C7E", fontWeight: "700" },
+  detailRow: {
+    flexDirection: "row", justifyContent: "space-between",
+    paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: "#F0F0F0"
+  },
+  detailLabel: { fontSize: 13, color: "#6B7280", fontWeight: "600" },
+  detailValue: { fontSize: 13, color: "#1F2937", fontWeight: "700" },
 });

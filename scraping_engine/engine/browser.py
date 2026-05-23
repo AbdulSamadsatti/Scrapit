@@ -12,8 +12,9 @@ class BrowserManager:
     Provides context isolation and basic anti-bot evasion.
     """
 
-    def __init__(self, headless: bool = True):
+    def __init__(self, headless: bool = True, user_agent: str | None = None):
         self.headless = headless
+        self.user_agent = user_agent
         self._playwright: Optional[Playwright] = None
         self._browser: Optional[Browser] = None
 
@@ -37,12 +38,13 @@ class BrowserManager:
         """Creates a new isolated browser context and returns a new page."""
         if self._browser is None:
             raise RuntimeError("Browser is not started. Call start() first or use 'with BrowserManager() as browser:'.")
-        
         # Create a new context to isolate cookies and cache per scraping task
-        context = self._browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
+        context_kwargs = {
+            "viewport": {"width": 1920, "height": 1080},
+        }
+        if self.user_agent:
+            context_kwargs["user_agent"] = self.user_agent
+        context = self._browser.new_context(**context_kwargs)
         return context.new_page()
 
     def close(self):

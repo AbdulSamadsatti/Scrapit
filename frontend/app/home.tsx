@@ -181,6 +181,7 @@ export default function HomeScreen() {
   });
   const [liveJobs, setLiveJobs] = useState<Job[]>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobsRefreshing, setJobsRefreshing] = useState(false);
   const [jobsError, setJobsError] = useState<string | null>(null);
 
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -296,29 +297,37 @@ export default function HomeScreen() {
     });
   }, [searchQuery, selectedCategory]);
 
+  const fetchJobsData = useCallback(async (forceRefresh = false) => {
+    if (!forceRefresh) {
+      setJobsLoading(true);
+    } else {
+      setJobsRefreshing(true);
+    }
+    setJobsError(null);
+    try {
+      const query = searchQuery.trim() || "developer";
+      const data = await getJobs(query, 25, false, forceRefresh);
+      setLiveJobs(data);
+    } catch (e) {
+      setJobsError((e as Error).message);
+    } finally {
+      if (!forceRefresh) {
+        setJobsLoading(false);
+      } else {
+        setJobsRefreshing(false);
+      }
+    }
+  }, [searchQuery]);
+
   useEffect(() => {
     if (selectedCategory === "Jobs") {
-      const fetchJobsData = async () => {
-        setJobsLoading(true);
-        setJobsError(null);
-        try {
-          const query = searchQuery.trim() || "developer";
-          const data = await getJobs(query);
-          setLiveJobs(data);
-        } catch (e) {
-          setJobsError((e as Error).message);
-        } finally {
-          setJobsLoading(false);
-        }
-      };
-
       const delayDebounceFn = setTimeout(() => {
         fetchJobsData();
       }, 500);
 
       return () => clearTimeout(delayDebounceFn);
     }
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory, fetchJobsData]);
 
   useEffect(() => {
     // Entrance animations
@@ -856,7 +865,7 @@ export default function HomeScreen() {
               {jobsError ? (
                 <Text style={{ color: "red", padding: 20 }}>Error: {jobsError}</Text>
               ) : (
-                <JobsList jobs={liveJobs} loading={jobsLoading} />
+                <JobsList jobs={liveJobs} loading={jobsLoading} externalRefreshing={jobsRefreshing} onRefresh={() => fetchJobsData(true)} />
               )}
             </View>
           ) : (

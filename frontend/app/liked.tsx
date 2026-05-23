@@ -67,6 +67,10 @@ export default function Liked() {
                     location: item.location,
                     type: item.type,
                     postedDate: item.postedDate,
+                    banner: item.banner || "",
+                    link: item.link || "",
+                    source: item.source || "",
+                    source_label: item.source_label || "",
                   },
                 });
               }}

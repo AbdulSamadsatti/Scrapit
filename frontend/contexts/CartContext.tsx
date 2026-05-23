@@ -16,6 +16,10 @@ export type ProductItem = {
   type?: string;
   postedDate?: string;
   category?: string;
+  banner?: string;
+  link?: string;
+  source?: string;
+  source_label?: string;
 };
 
 export type CartItem = ProductItem & {
