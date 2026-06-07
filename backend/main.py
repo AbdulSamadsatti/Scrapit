@@ -6,11 +6,16 @@ import re
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import FastAPI, Query, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from fastapi.middleware.cors import CORSMiddleware
 
 from scraping_engine.serp.google_job import get_google_jobs
+from scraping_engine.core.travel_runner import (
+    flatten_travel_results,
+    run_all_travel_scrapers,
+)
 
 app = FastAPI()
 
@@ -81,6 +86,33 @@ async def fetch_jobs(
             "status": "success",
             "total_results": len(jobs),
             "jobs": jobs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/travel")
+async def fetch_travel(
+    q: str = Query("Hunza tour", description="Travel search query, e.g., 'Hunza tour'"),
+    max_items: int = Query(5, ge=1, le=20, description="Maximum items per travel source"),
+):
+    """
+    Fetch travel listings from Kipgo, Sastaticket, and Bookme.
+    """
+    try:
+        results = await run_in_threadpool(
+            run_all_travel_scrapers,
+            query=q,
+            max_items_per_site=max_items,
+        )
+        travel_items = flatten_travel_results(results)
+        return {
+            "status": "success",
+            "source": "live_travel_scrape",
+            "query": q,
+            "total_results": len(travel_items),
+            "results_by_source": results,
+            "travel_items": travel_items,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

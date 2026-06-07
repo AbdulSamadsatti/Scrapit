@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   FlatList,
@@ -28,6 +29,7 @@ import LottieHamburger from "@/components/ui/Hamburger";
 import { StatusBar } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCart } from "@/contexts/CartContext";
+import { getApiBaseUrl } from "@/lib/api";
 
 const { width } = Dimensions.get("window");
 
@@ -339,6 +341,24 @@ interface ItemData {
   image: string;
   type: string;
   postedDate: string;
+  description?: string;
+  sourceUrl?: string;
+}
+
+interface TravelApiItem {
+  title?: string;
+  description?: string;
+  price?: string;
+  currency?: string;
+  image_url?: string;
+  location?: string;
+  city?: string;
+  country?: string;
+  offer_type?: string;
+  source_url?: string;
+  booking_url?: string;
+  source?: string;
+  source_label?: string;
 }
 
 export default function CategoryDetails() {
@@ -359,6 +379,9 @@ export default function CategoryDetails() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMenuVisualOpen, setIsMenuVisualOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [liveTravelItems, setLiveTravelItems] = useState<ItemData[]>([]);
+  const [isTravelLoading, setIsTravelLoading] = useState(false);
+  const [travelError, setTravelError] = useState("");
   const [activeFilterDropdown, setActiveFilterDropdown] = useState<
     string | null
   >(null);
@@ -473,6 +496,9 @@ export default function CategoryDetails() {
   ];
 
   const items = React.useMemo(() => {
+    if (selectedCategory === "Travel" && liveTravelItems.length > 0) {
+      return liveTravelItems;
+    }
     if (selectedCategory === "All") {
       return Object.values(ITEMS_DATA).flat() as ItemData[];
     }
@@ -481,6 +507,76 @@ export default function CategoryDetails() {
     return arr && arr.length > 0
       ? arr
       : (Object.values(ITEMS_DATA).flat() as ItemData[]);
+  }, [selectedCategory, liveTravelItems]);
+
+  useEffect(() => {
+    if (selectedCategory !== "Travel") return;
+
+    let isActive = true;
+    const controller = new AbortController();
+
+    const loadTravelListings = async () => {
+      setIsTravelLoading(true);
+      setTravelError("");
+
+      try {
+        const apiBaseUrl = getApiBaseUrl();
+        const query = searchQuery.trim() || "Hunza tour";
+        const response = await fetch(
+          `${apiBaseUrl}/api/travel?q=${encodeURIComponent(query)}&max_items=5`,
+          { signal: controller.signal },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Travel API returned ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const travelItems: TravelApiItem[] = Array.isArray(payload.travel_items)
+          ? payload.travel_items
+          : [];
+
+        const mappedItems = travelItems
+          .filter((item) => item.title && (item.source_url || item.booking_url))
+          .map((item, index) => {
+            const location = item.location || item.city || item.country || "Travel";
+            const price = item.price || "Price on website";
+            const sourceUrl = item.source_url || item.booking_url || "";
+
+            return {
+              id: `travel-${item.source || "source"}-${index}-${sourceUrl}`,
+              title: item.title || "Travel Listing",
+              price,
+              location,
+              image:
+                item.image_url ||
+                "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=400&auto=format&fit=crop",
+              type: item.offer_type || item.source_label || "Travel",
+              postedDate: item.source_label || "Live",
+              description: item.description || "",
+              sourceUrl,
+            };
+          });
+
+        if (!isActive) return;
+        setLiveTravelItems(mappedItems);
+        if (mappedItems.length === 0) {
+          setTravelError("Live scraper returned no travel listings. Showing saved examples.");
+        }
+      } catch (error) {
+        if (!isActive || controller.signal.aborted) return;
+        setTravelError("Live travel listings could not load. Showing saved examples.");
+      } finally {
+        if (isActive) setIsTravelLoading(false);
+      }
+    };
+
+    loadTravelListings();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
   }, [selectedCategory]);
 
   // Animation values
@@ -620,6 +716,8 @@ export default function CategoryDetails() {
                 location: item.location,
                 type: item.type,
                 postedDate: item.postedDate,
+                description: item.description || "",
+                sourceUrl: item.sourceUrl || "",
               },
             });
           }}
@@ -705,6 +803,8 @@ export default function CategoryDetails() {
                 location: item.location,
                 type: item.type,
                 postedDate: item.postedDate,
+                description: item.description || "",
+                sourceUrl: item.sourceUrl || "",
               },
             });
           }}
@@ -1059,6 +1159,15 @@ export default function CategoryDetails() {
         </View>
       </View>
 
+      {selectedCategory === "Travel" && (isTravelLoading || travelError) && (
+        <View style={styles.liveStatus}>
+          {isTravelLoading && <ActivityIndicator color="#1E7C7E" size="small" />}
+          <Text style={travelError ? styles.liveStatusError : styles.liveStatusText}>
+            {travelError || "Loading live travel listings..."}
+          </Text>
+        </View>
+      )}
+
       {/* Categories Selector */}
       <View style={styles.categoriesWrapper}>
         <FlatList
@@ -1283,6 +1392,28 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#E0E0E0",
+  },
+  liveStatus: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#EAF6F6",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  liveStatusText: {
+    color: "#1E7C7E",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  liveStatusError: {
+    color: "#A45A00",
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1,
   },
   resultsCount: {
     flex: 1,

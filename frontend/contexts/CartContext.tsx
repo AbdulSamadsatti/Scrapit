@@ -16,6 +16,8 @@ export type ProductItem = {
   type?: string;
   postedDate?: string;
   category?: string;
+  sourceUrl?: string;
+  description?: string;
 };
 
 export type CartItem = ProductItem & {

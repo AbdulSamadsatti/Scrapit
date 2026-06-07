@@ -6,6 +6,7 @@ import {
   Text,
   TouchableOpacity,
   Animated,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,6 +30,7 @@ export default function ProductDetailsScreen() {
   const postedDate = (params.postedDate as string) || "New";
   const category = (params.category as string) || "All";
   const descriptionParam = (params.description as string) || "";
+  const sourceUrl = (params.sourceUrl as string) || "";
 
   const formatPrice = (p: string) =>
     `Rs ${(p || "").replace(/^(rs|RS)\s*/i, "")}`;
@@ -56,6 +58,8 @@ export default function ProductDetailsScreen() {
     type,
     postedDate,
     category,
+    sourceUrl,
+    description: descriptionParam,
   };
 
   return (
@@ -182,6 +186,16 @@ export default function ProductDetailsScreen() {
               </Text>
             </TouchableOpacity>
           </View>
+          {sourceUrl ? (
+            <TouchableOpacity
+              style={styles.websiteButton}
+              activeOpacity={0.85}
+              onPress={() => Linking.openURL(sourceUrl)}
+            >
+              <Ionicons name="open-outline" size={19} color="#1E7C7E" />
+              <Text style={styles.websiteButtonText}>Open Original Website</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <View style={styles.descriptionCard}>
@@ -329,6 +343,23 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 16,
     gap: 12,
+  },
+  websiteButton: {
+    marginTop: 14,
+    height: 46,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(30, 124, 126, 0.25)",
+    backgroundColor: "rgba(30, 124, 126, 0.08)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  websiteButtonText: {
+    color: "#1E7C7E",
+    fontSize: 14,
+    fontWeight: "700",
   },
   primaryButton: {
     flex: 1,

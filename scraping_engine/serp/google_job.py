@@ -1,6 +1,9 @@
 import logging
 from typing import List, Dict, Any, Optional
-from serpapi import GoogleSearch
+try:
+    from serpapi import GoogleSearch
+except ImportError:
+    GoogleSearch = None
 
 from scraping_engine.config import SERP_API_KEY
 
@@ -26,6 +29,9 @@ def get_google_jobs(
     """
     if not SERP_API_KEY:
         logger.error("SERP_API_KEY is not configured or missing in .env.")
+        return []
+    if GoogleSearch is None:
+        logger.error("SerpApi package is not installed. Install google-search-results to use Google Jobs.")
         return []
 
     params = {
