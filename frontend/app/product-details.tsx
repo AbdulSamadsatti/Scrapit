@@ -16,7 +16,7 @@ import { useCart } from "../contexts/CartContext";
 export default function ProductDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { addToCart, toggleLike, isLiked } = useCart();
+  const { toggleLike, isLiked } = useCart();
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const id = (params.itemId as string) || (params.id as string) || "";
@@ -49,6 +49,15 @@ export default function ProductDetailsScreen() {
     "Quality checked",
   ];
 
+  const headerTitle =
+    category === "Travel" ? "Travel Details" :
+    category === "Jobs" ? "Job Details" :
+    category === "Property" ? "Property Details" :
+    category === "Automobiles" ? "Vehicle Details" :
+    category === "E-Commerce" ? "Product Details" :
+    category === "Food" ? "Food Details" :
+    "Listing Details";
+
   const itemPayload = {
     id,
     title,
@@ -78,7 +87,7 @@ export default function ProductDetailsScreen() {
           >
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Product Details</Text>
+          <Text style={styles.headerTitle}>{headerTitle}</Text>
           <View style={styles.headerRight} />
         </View>
       </LinearGradient>
@@ -156,12 +165,21 @@ export default function ProductDetailsScreen() {
 
           <View style={styles.actionsRow}>
             <TouchableOpacity
-              style={styles.primaryButton}
-              activeOpacity={0.85}
-              onPress={() => addToCart(itemPayload)}
+              style={[
+                styles.primaryButton,
+                !sourceUrl && styles.primaryButtonDisabled,
+              ]}
+              activeOpacity={sourceUrl ? 0.85 : 1}
+              onPress={() => {
+                if (sourceUrl) {
+                  Linking.openURL(sourceUrl);
+                }
+              }}
             >
-              <Ionicons name="cart" size={20} color="#fff" />
-              <Text style={styles.primaryButtonText}>Add to Cart</Text>
+              <Ionicons name="open-outline" size={20} color="#fff" />
+              <Text style={styles.primaryButtonText}>
+                {sourceUrl ? "View Listing" : "No Link Available"}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -186,16 +204,6 @@ export default function ProductDetailsScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-          {sourceUrl ? (
-            <TouchableOpacity
-              style={styles.websiteButton}
-              activeOpacity={0.85}
-              onPress={() => Linking.openURL(sourceUrl)}
-            >
-              <Ionicons name="open-outline" size={19} color="#1E7C7E" />
-              <Text style={styles.websiteButtonText}>Open Original Website</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
 
         <View style={styles.descriptionCard}>
@@ -344,23 +352,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     gap: 12,
   },
-  websiteButton: {
-    marginTop: 14,
-    height: 46,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(30, 124, 126, 0.25)",
-    backgroundColor: "rgba(30, 124, 126, 0.08)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  websiteButtonText: {
-    color: "#1E7C7E",
-    fontSize: 14,
-    fontWeight: "700",
-  },
   primaryButton: {
     flex: 1,
     backgroundColor: "#1E7C7E",
@@ -370,6 +361,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexDirection: "row",
     gap: 8,
+  },
+  primaryButtonDisabled: {
+    backgroundColor: "#9CBDBD",
   },
   primaryButtonText: {
     color: "#fff",

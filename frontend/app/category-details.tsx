@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -8,6 +8,7 @@ import {
   FlatList,
   Image,
   Platform,
+  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -337,6 +338,7 @@ interface ItemData {
   id: string;
   title: string;
   price: string;
+  priceAmount?: number;
   location: string;
   image: string;
   type: string;
@@ -349,6 +351,7 @@ interface TravelApiItem {
   title?: string;
   description?: string;
   price?: string;
+  price_amount?: number;
   currency?: string;
   image_url?: string;
   location?: string;
@@ -359,6 +362,80 @@ interface TravelApiItem {
   booking_url?: string;
   source?: string;
   source_label?: string;
+}
+
+// ─── Strip scraping noise from location strings ──────────────────────────────
+// e.g. "Hotels In Murree" → "Murree"   |   "F7, Islamabad" → "F7, Islamabad"
+// Returns "" for descriptor-only strings like "Cheap", "Budget", "C", etc.
+const _NON_CITY_WORDS = new Set([
+  "cheap", "budget", "luxury", "family", "best", "top", "good", "nice",
+  "affordable", "free", "last", "minute", "boutique", "popular", "modern",
+  "comfortable", "cozy", "safe", "clean", "big", "small", "near", "around",
+  "new", "old", "central", "downtown", "quiet", "discount", "deals",
+]);
+
+function cleanLocation(raw: string): string {
+  if (!raw || raw.trim().length === 0) return "";
+  const cleaned = raw
+    .replace(/\b(hotels?\s+in|hotel\s+in|flights?\s+in|flight\s+in)\b\s*/gi, "")
+    .replace(/\b(hotels?|flights?|resorts?|packages?|tours?|trip|travel)\b\s*/gi, "")
+    .replace(/^\s*[,\-\s]+|[,\-\s]+\s*$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  // Reject single chars or known non-city descriptor words
+  if (cleaned.length <= 1 || _NON_CITY_WORDS.has(cleaned.toLowerCase())) return "";
+  return cleaned.length >= 2 ? cleaned : "";
+}
+
+// ─── Image with auto-fallback when CDN URL expires ───────────────────────────
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=400&auto=format&fit=crop";
+
+function FallbackImage({
+  uri,
+  style,
+  resizeMode = "cover" as const,
+}: {
+  uri: string;
+  style: any;
+  resizeMode?: "cover" | "contain" | "stretch" | "center";
+}) {
+  const [src, setSrc] = useState(uri);
+  useEffect(() => { setSrc(uri); }, [uri]);
+  return (
+    <Image
+      source={{ uri: src || FALLBACK_IMAGE }}
+      style={style}
+      resizeMode={resizeMode}
+      onError={() => setSrc(FALLBACK_IMAGE)}
+    />
+  );
+}
+
+// ─── Skeleton placeholder card (shown while travel data loads) ────────────────
+function SkeletonItem() {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.9] });
+  return (
+    <Animated.View style={[styles.listCard, { opacity, marginBottom: 16 }]}>
+      <View style={styles.listCardContent}>
+        <View style={[styles.listImageWrapper, styles.skeletonBox]} />
+        <View style={[styles.listInfo, { gap: 10 }]}>
+          <View style={[styles.skeletonLine, { width: "82%" }]} />
+          <View style={[styles.skeletonLine, { width: "48%", height: 12 }]} />
+          <View style={[styles.skeletonLine, { width: "65%" }]} />
+          <View style={[styles.skeletonLine, { width: "38%", height: 10 }]} />
+        </View>
+      </View>
+    </Animated.View>
+  );
 }
 
 export default function CategoryDetails() {
@@ -374,7 +451,7 @@ export default function CategoryDetails() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(categoryName);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">(categoryName === "Travel" || categoryName === "Automobiles" ? "list" : "grid");
   const [likedItems, setLikedItems] = useState<{ [key: string]: boolean }>({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMenuVisualOpen, setIsMenuVisualOpen] = useState(false);
@@ -382,6 +459,12 @@ export default function CategoryDetails() {
   const [liveTravelItems, setLiveTravelItems] = useState<ItemData[]>([]);
   const [isTravelLoading, setIsTravelLoading] = useState(false);
   const [travelError, setTravelError] = useState("");
+  const [liveAutoItems, setLiveAutoItems] = useState<ItemData[]>([]);
+  const [isAutoLoading, setIsAutoLoading] = useState(false);
+  const [autoError, setAutoError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [activeFilterDropdown, setActiveFilterDropdown] = useState<
     string | null
   >(null);
@@ -496,8 +579,11 @@ export default function CategoryDetails() {
   ];
 
   const items = React.useMemo(() => {
-    if (selectedCategory === "Travel" && liveTravelItems.length > 0) {
+    if (selectedCategory === "Travel") {
       return liveTravelItems;
+    }
+    if (selectedCategory === "Automobiles") {
+      return liveAutoItems;
     }
     if (selectedCategory === "All") {
       return Object.values(ITEMS_DATA).flat() as ItemData[];
@@ -507,7 +593,7 @@ export default function CategoryDetails() {
     return arr && arr.length > 0
       ? arr
       : (Object.values(ITEMS_DATA).flat() as ItemData[]);
-  }, [selectedCategory, liveTravelItems]);
+  }, [selectedCategory, liveTravelItems, liveAutoItems]);
 
   useEffect(() => {
     if (selectedCategory !== "Travel") return;
@@ -521,11 +607,10 @@ export default function CategoryDetails() {
 
       try {
         const apiBaseUrl = getApiBaseUrl();
-        const query = searchQuery.trim() || "Hunza tour";
-        const response = await fetch(
-          `${apiBaseUrl}/api/travel?q=${encodeURIComponent(query)}&max_items=5`,
-          { signal: controller.signal },
-        );
+        const query = debouncedQuery.trim() || "Pakistan travel";
+        const url = `${apiBaseUrl}/api/travel?q=${encodeURIComponent(query)}`;
+        console.log("[Travel] fetching:", url);
+        const response = await fetch(url, { signal: controller.signal });
 
         if (!response.ok) {
           throw new Error(`Travel API returned ${response.status}`);
@@ -537,22 +622,29 @@ export default function CategoryDetails() {
           : [];
 
         const mappedItems = travelItems
-          .filter((item) => item.title && (item.source_url || item.booking_url))
+          .filter((item) => item.title && item.title.trim().length > 2)
           .map((item, index) => {
-            const location = item.location || item.city || item.country || "Travel";
+            const location = cleanLocation(item.location || item.city || item.country || "")  || "Travel";
             const price = item.price || "Price on website";
             const sourceUrl = item.source_url || item.booking_url || "";
+
+            const offerLabel =
+              item.offer_type === "hotel" ? "Hotel" :
+              item.offer_type === "flight" ? "Flight" :
+              item.offer_type === "package" ? "Package" :
+              item.offer_type || "Travel";
 
             return {
               id: `travel-${item.source || "source"}-${index}-${sourceUrl}`,
               title: item.title || "Travel Listing",
               price,
+              priceAmount: item.price_amount ?? undefined,
               location,
               image:
                 item.image_url ||
                 "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=400&auto=format&fit=crop",
-              type: item.offer_type || item.source_label || "Travel",
-              postedDate: item.source_label || "Live",
+              type: offerLabel,
+              postedDate: item.source_label || item.source || "Travel",
               description: item.description || "",
               sourceUrl,
             };
@@ -565,9 +657,14 @@ export default function CategoryDetails() {
         }
       } catch (error) {
         if (!isActive || controller.signal.aborted) return;
-        setTravelError("Live travel listings could not load. Showing saved examples.");
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error("[Travel] fetch failed:", msg);
+        setTravelError(`Could not reach server (${msg}). Showing saved examples.`);
       } finally {
-        if (isActive) setIsTravelLoading(false);
+        if (isActive) {
+          setIsTravelLoading(false);
+          setIsRefreshing(false);
+        }
       }
     };
 
@@ -577,7 +674,100 @@ export default function CategoryDetails() {
       isActive = false;
       controller.abort();
     };
-  }, [selectedCategory]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory, debouncedQuery, refreshKey]);
+
+  // ─── Automobiles: live API fetch ──────────────────────────────────
+  useEffect(() => {
+    if (selectedCategory !== "Automobiles") return;
+
+    let isActive = true;
+    const controller = new AbortController();
+
+    const fetchAutos = async () => {
+      setIsAutoLoading(true);
+      setAutoError("");
+
+      try {
+        const baseUrl = getApiBaseUrl();
+        const query = debouncedQuery.trim() || "used cars Pakistan";
+        const url = `${baseUrl}/api/automobiles?q=${encodeURIComponent(query)}`;
+
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: { Accept: "application/json" },
+        });
+
+        if (!response.ok) {
+          throw new Error(`API ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const autoItems: any[] = Array.isArray(payload.auto_items)
+          ? payload.auto_items
+          : [];
+
+        const mappedItems: ItemData[] = autoItems
+          .filter((item: any) => item.title && item.title.trim().length > 2)
+          .map((item: any, index: number) => {
+            const location =
+              cleanLocation(item.location || item.city || "") || "Pakistan";
+            const price = item.price || "Contact for price";
+            const sourceUrl = item.listing_url || "";
+
+            // Build specs badge: "2021 • Petrol • Automatic"
+            const specParts: string[] = [];
+            if (item.year) specParts.push(String(item.year));
+            if (item.fuel_type) specParts.push(item.fuel_type);
+            if (item.transmission) specParts.push(item.transmission);
+            const specsBadge = specParts.join(" • ") || (item.condition || "Used");
+
+            // Build description: "61,000 km • 1598cc • Used"
+            const descParts: string[] = [];
+            if (item.mileage) descParts.push(item.mileage);
+            if (item.engine_capacity) descParts.push(item.engine_capacity);
+            if (item.make) descParts.push(item.make);
+            if (item.condition) descParts.push(item.condition === "used" ? "Used" : item.condition);
+            const description = descParts.join(" • ") || item.description || "";
+
+            return {
+              id: `auto-${item.source || "src"}-${index}-${sourceUrl}`,
+              title: item.title || "Vehicle Listing",
+              price,
+              priceAmount: item.price_amount ?? undefined,
+              location,
+              image:
+                item.image_url ||
+                "https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?q=80&w=400&auto=format&fit=crop",
+              type: specsBadge,
+              postedDate: item.source_label || item.source || "Auto",
+              description,
+              sourceUrl,
+            };
+          });
+
+        if (!isActive) return;
+        setLiveAutoItems(mappedItems);
+        if (mappedItems.length === 0) {
+          setAutoError("No automobile listings found.");
+        }
+      } catch (error) {
+        if (!isActive || controller.signal.aborted) return;
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error("[Auto] fetch failed:", msg);
+        setAutoError(`Could not load automobile listings: ${msg}`);
+      } finally {
+        if (isActive) setIsAutoLoading(false);
+      }
+    };
+
+    fetchAutos();
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory, debouncedQuery, refreshKey]);
 
   // Animation values
   const headerOpacity = useRef(new Animated.Value(0)).current;
@@ -621,13 +811,30 @@ export default function CategoryDetails() {
       });
     }
     setSelectedCategory(category);
+    if (category === "Travel" || category === "Automobiles") setViewMode("list");
   };
+
+  // Debounce search input — waits 600 ms before firing API call
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 600);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  // Pull-to-refresh handler
+  const handleRefresh = useCallback(() => {
+    if (selectedCategory === "Travel") {
+      setIsRefreshing(true);
+      setRefreshKey((k) => k + 1);
+    }
+  }, [selectedCategory]);
 
   const filteredItems = React.useMemo(() => {
     let result = [...items];
 
-    // Apply search query
-    if (searchQuery) {
+    // For Travel the API already searched — don't re-filter here or you'd wipe
+    // out results whose title doesn't literally contain the full query string.
+    // For other categories (using local dummy data) keep the title filter.
+    if (searchQuery && selectedCategory !== "Travel" && selectedCategory !== "Automobiles") {
       result = result.filter((item) =>
         item.title.toLowerCase().includes(searchQuery.toLowerCase()),
       );
@@ -648,11 +855,11 @@ export default function CategoryDetails() {
       });
     }
 
-    // Apply price sorting
+    // Apply price sorting using numeric priceAmount (handles "Rs 2.60 Crore" correctly)
     if (selectedFilters.price !== "All") {
       result.sort((a, b) => {
-        const priceA = parseFloat(a.price.replace(/[^\d.]/g, ""));
-        const priceB = parseFloat(b.price.replace(/[^\d.]/g, ""));
+        const priceA = a.priceAmount ?? 0;
+        const priceB = b.priceAmount ?? 0;
         return selectedFilters.price === "Low to High"
           ? priceA - priceB
           : priceB - priceA;
@@ -723,8 +930,8 @@ export default function CategoryDetails() {
           }}
         >
           <View style={styles.gridImageWrapper}>
-            <Image
-              source={{ uri: resolveImage(item.image) }}
+            <FallbackImage
+              uri={resolveImage(item.image)}
               style={styles.gridImage}
               resizeMode="cover"
             />
@@ -748,6 +955,11 @@ export default function CategoryDetails() {
               {item.title}
             </Text>
             <Text style={styles.gridPrice}>{formatPrice(item.price)}</Text>
+            {item.description ? (
+              <Text style={styles.gridDescription} numberOfLines={1}>
+                {item.description}
+              </Text>
+            ) : null}
             <View style={styles.gridLocation}>
               <Ionicons
                 name="location-outline"
@@ -755,7 +967,7 @@ export default function CategoryDetails() {
                 color="rgba(255, 255, 255, 0.9)"
               />
               <Text style={styles.gridLocationText} numberOfLines={1}>
-                {item.location}
+                {cleanLocation(item.location)}
               </Text>
             </View>
             <TouchableOpacity
@@ -811,8 +1023,8 @@ export default function CategoryDetails() {
           style={styles.listCardContent}
         >
           <View style={styles.listImageWrapper}>
-            <Image
-              source={{ uri: resolveImage(item.image) }}
+            <FallbackImage
+              uri={resolveImage(item.image)}
               style={styles.listImage}
               resizeMode="cover"
             />
@@ -825,10 +1037,15 @@ export default function CategoryDetails() {
               {item.title}
             </Text>
             <Text style={styles.listPrice}>{formatPrice(item.price)}</Text>
+            {item.description ? (
+              <Text style={styles.listDescription} numberOfLines={1}>
+                {item.description}
+              </Text>
+            ) : null}
             <View style={styles.listMeta}>
               <Ionicons name="location-outline" size={14} color="#666" />
               <Text style={styles.listLocationText} numberOfLines={1}>
-                {item.location}
+                {cleanLocation(item.location)}
               </Text>
             </View>
             <View style={styles.listType}>
@@ -1159,12 +1376,15 @@ export default function CategoryDetails() {
         </View>
       </View>
 
-      {selectedCategory === "Travel" && (isTravelLoading || travelError) && (
+      {/* Only show error banner — skeleton handles the loading state */}
+      {selectedCategory === "Travel" && !isTravelLoading && !!travelError && (
         <View style={styles.liveStatus}>
-          {isTravelLoading && <ActivityIndicator color="#1E7C7E" size="small" />}
-          <Text style={travelError ? styles.liveStatusError : styles.liveStatusText}>
-            {travelError || "Loading live travel listings..."}
-          </Text>
+          <Text style={styles.liveStatusError}>{travelError}</Text>
+        </View>
+      )}
+      {selectedCategory === "Automobiles" && !isAutoLoading && !!autoError && (
+        <View style={styles.liveStatus}>
+          <Text style={styles.liveStatusError}>{autoError}</Text>
         </View>
       )}
 
@@ -1190,8 +1410,8 @@ export default function CategoryDetails() {
                       isSelected && styles.categoryCardActive,
                     ]}
                   >
-                    <Image
-                      source={{ uri: resolveImage(item.image) }}
+                    <FallbackImage
+                      uri={resolveImage(item.image)}
                       style={styles.categoryImage}
                       resizeMode="cover"
                     />
@@ -1222,14 +1442,37 @@ export default function CategoryDetails() {
         key={viewMode}
         contentContainerStyle={styles.itemsList}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          selectedCategory === "Travel" || selectedCategory === "Automobiles" ? (
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={["#1E7C7E"]}
+              tintColor="#1E7C7E"
+            />
+          ) : undefined
+        }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={64} color="#CCC" />
-            <Text style={styles.emptyStateTitle}>No Items Found</Text>
-            <Text style={styles.emptyStateText}>
-              Try adjusting your search terms
-            </Text>
-          </View>
+          (selectedCategory === "Travel" && isTravelLoading) ||
+          (selectedCategory === "Automobiles" && isAutoLoading) ? (
+            <View>
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <SkeletonItem key={i} />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={64} color="#CCC" />
+              <Text style={styles.emptyStateTitle}>No Items Found</Text>
+              <Text style={styles.emptyStateText}>
+                {selectedCategory === "Travel" && travelError
+                  ? travelError
+                  : selectedCategory === "Automobiles" && autoError
+                    ? autoError
+                    : "Try adjusting your search terms"}
+              </Text>
+            </View>
+          )
         }
       />
 
@@ -1584,6 +1827,11 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.9)",
     fontSize: 13,
     fontWeight: "600",
+    marginBottom: 4,
+  },
+  gridDescription: {
+    color: "rgba(255, 255, 255, 0.7)",
+    fontSize: 11,
     marginBottom: 6,
   },
   gridLocation: {
@@ -1687,6 +1935,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     color: "#1E7C7E",
+    marginBottom: 4,
+  },
+  listDescription: {
+    fontSize: 12,
+    color: "#888",
     marginBottom: 6,
   },
   listMeta: {
@@ -1751,5 +2004,15 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 8,
     textAlign: "center",
+  },
+  // ── Skeleton ──────────────────────────────────────────────────────────────
+  skeletonBox: {
+    backgroundColor: "#E5E7EB",
+    borderRadius: 15,
+  },
+  skeletonLine: {
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#E5E7EB",
   },
 });

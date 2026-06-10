@@ -361,3 +361,87 @@ class SavedItem(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     item_id = Column(Integer, ForeignKey("items.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# Flat listing models — used by search_services (DB-first cache layer)
+# These are independent of the normalised items/* tables and store raw
+# scraper output so the frontend can load instantly from DB.
+# ---------------------------------------------------------------------------
+
+class JobListing(Base):
+    __tablename__ = "job_listings"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    query       = Column(String(300), index=True)
+    source      = Column(String(100), index=True)
+    title       = Column(String(300))
+    company     = Column(String(200))
+    location    = Column(String(200))
+    salary      = Column(String(200))
+    description = Column(Text, default="")
+    snippet     = Column(Text, default="")
+    logo        = Column(Text, default="")
+    banner      = Column(Text, default="")
+    apply_link  = Column(Text, index=True)
+    posted_at   = Column(String(100), default="")
+    scraped_at  = Column(DateTime, nullable=False, server_default=func.now(), index=True)
+    expires_at  = Column(DateTime, index=True)
+
+
+class TravelListing(Base):
+    __tablename__ = "travel_listings"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    query        = Column(String(300), index=True)
+    source       = Column(String(100), index=True)
+    offer_type   = Column(String(50), index=True)   # hotel / flight / package
+    title        = Column(String(500))
+    description  = Column(Text, default="")
+    price        = Column(String(200))
+    price_amount = Column(Numeric(14, 2), nullable=True, index=True)
+    currency     = Column(String(10), default="PKR")
+    image_url    = Column(Text, default="")
+    location     = Column(String(300), index=True)
+    city         = Column(String(150), index=True)
+    country      = Column(String(150), default="Pakistan")
+    origin       = Column(String(150))
+    destination  = Column(String(150))
+    airline      = Column(String(150))
+    hotel_name   = Column(String(255))
+    nights       = Column(String(50))
+    booking_url  = Column(Text, default="")
+    check_in_date  = Column(String(50))
+    check_out_date = Column(String(50))
+    rating       = Column(Numeric(3, 2), nullable=True)
+    scraped_at   = Column(DateTime, nullable=False, server_default=func.now(), index=True)
+    expires_at   = Column(DateTime, index=True)
+
+
+class AutoListing(Base):
+    __tablename__ = "auto_listings"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    query           = Column(String(300), index=True)
+    source          = Column(String(100), index=True)
+    title           = Column(String(500))
+    description     = Column(Text, default="")
+    price           = Column(String(200))
+    price_amount    = Column(Numeric(14, 2), nullable=True, index=True)
+    currency        = Column(String(10), default="PKR")
+    image_url       = Column(Text, default="")
+    location        = Column(String(300), index=True)
+    city            = Column(String(150), index=True)
+    make            = Column(String(100), index=True)
+    model           = Column(String(100), index=True)
+    year            = Column(Integer, nullable=True, index=True)
+    mileage         = Column(String(100))
+    fuel_type       = Column(String(50))
+    transmission    = Column(String(50))
+    engine_capacity = Column(String(50))
+    body_type       = Column(String(50))
+    color           = Column(String(50))
+    condition       = Column(String(50))
+    listing_url     = Column(Text, default="")
+    scraped_at      = Column(DateTime, nullable=False, server_default=func.now(), index=True)
+    expires_at      = Column(DateTime, index=True)
