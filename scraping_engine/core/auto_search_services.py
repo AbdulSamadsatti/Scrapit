@@ -43,6 +43,8 @@ _STOP_WORDS = {
     "in", "at", "the", "a", "an", "for", "of", "near", "around",
     "car", "cars", "vehicle", "vehicles", "used", "new", "sale",
     "buy", "sell", "price", "pakistan", "available",
+    "bike", "bikes", "motorcycle", "motorcycles", "bicycle", "bicycles",
+    "cheap", "best", "top",
 }
 
 
@@ -81,10 +83,14 @@ def search_in_db(query: str, limit: int = 0) -> List[Dict[str, Any]]:
         from app.models import AutoListing
 
         clean = query.lower().strip()
-        generic = {"used cars pakistan", "cars", "car", "vehicles", "automobiles", ""}
+        generic = {"used cars pakistan", "cars", "car", "vehicles", "automobiles",
+                   "bikes", "bike", "motorcycle", "motorcycles", "bicycle", "bicycles", ""}
 
         if clean in generic:
-            q = db.query(AutoListing).order_by(AutoListing.scraped_at.desc())
+            q = db.query(AutoListing).filter(
+                AutoListing.image_url.isnot(None),
+                AutoListing.image_url != "",
+            ).order_by(AutoListing.scraped_at.desc())
             if limit > 0:
                 q = q.limit(limit)
             rows = q.all()
@@ -110,7 +116,9 @@ def search_in_db(query: str, limit: int = 0) -> List[Dict[str, Any]]:
             logger.info("[AutoSearch] DB miss for '%s'", query)
             return []
 
-        logger.info("[AutoSearch] DB hit: %d results for '%s'", len(rows), query)
+        # Only return rows with images
+        rows = [r for r in rows if r.image_url and r.image_url.strip()]
+        logger.info("[AutoSearch] DB hit: %d results for '%s' (with images)", len(rows), query)
         return [_row_to_dict(r) for r in rows]
 
     except Exception as exc:

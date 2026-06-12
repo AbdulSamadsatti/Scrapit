@@ -1,12 +1,15 @@
 """
-Travel scraper configuration.
-
-These are broad selectors because travel pages can change often. Each scraper
-also has fallback extraction logic so one selector change does not break
-everything.
+Travel scraper configuration — all Playwright-based sites.
 """
 
 TRAVEL_SITES = {
+    "booking": {
+        "label": "Booking.com",
+        "base_url": "https://www.booking.com",
+        "search_urls": [
+            "https://www.booking.com/searchresults.html?ss={query}&dest_type=city&lang=en-us",
+        ],
+    },
     "kipgo": {
         "label": "Kipgo",
         "base_url": "https://www.gokipgo.com",

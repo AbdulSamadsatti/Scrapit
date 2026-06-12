@@ -292,6 +292,9 @@ def _looks_like_travel_listing(item: Dict[str, Any], source: str) -> bool:
         "kipgo": ["/tour/", "/stay/", "/activity/", "/experience/", "/rental/"],
         "sastaticket": ["/hotel", "/flight", "/umrah", "/bus", "/tour", "/holiday", "/package"],
         "bookme": ["/hotel", "/flight", "/bus", "/tour", "/travel", "/package"],
+        "booking": ["/hotel", "/searchresults", "/city/", "/region/", "/landmark/"],
+        "tripadvisor": ["/Hotel", "/Tourism", "/Attraction", "/Restaurant", "/VacationRental"],
+        "jovago": ["/hotel", "/en-pk/"],
     }
     allowed_parts = source_rules.get(source, [])
     if allowed_parts and not any(part in url for part in allowed_parts):

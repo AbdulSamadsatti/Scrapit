@@ -12,7 +12,7 @@ from scraping_engine.core.auto_search_services import search_automobiles
 logger = logging.getLogger(__name__)
 
 AUTO_QUERIES = [
-    # Popular makes in Pakistan
+    # Popular cars
     "Toyota Corolla",
     "Honda Civic",
     "Honda City",
@@ -20,27 +20,36 @@ AUTO_QUERIES = [
     "Suzuki Cultus",
     "Suzuki WagonR",
     "Suzuki Swift",
+    "Suzuki Mehran",
     "Toyota Yaris",
     "Hyundai Tucson",
-    "Hyundai Elantra",
     "KIA Sportage",
     "KIA Picanto",
     "Toyota Fortuner",
     "Toyota Hilux",
-    "Honda BR-V",
     "Changan Alsvin",
     "MG HS",
-    "MG ZS",
     "Haval H6",
-    "Haval Jolion",
-    # Bikes
+    # Motorcycles
     "Honda 125",
-    "Yamaha YBR 125",
+    "Honda CG 125",
     "Honda CD 70",
+    "Yamaha YBR 125",
+    "Suzuki GD 110",
+    "Suzuki GS 150",
+    "Honda CB 150",
+    "United 70cc",
+    "Super Power 125",
+    # Bicycles
+    "bicycle",
+    "mountain bike",
+    "road bike",
     # Generic searches
     "used cars Islamabad",
     "used cars Lahore",
     "used cars Karachi",
+    "used bikes Lahore",
+    "used bikes Karachi",
     "cheap cars Pakistan",
     "automatic cars Pakistan",
 ]

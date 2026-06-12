@@ -88,9 +88,12 @@ def search_in_db(query: str, limit: int = 0) -> List[Dict[str, Any]]:
         clean = query.lower().strip()
         generic = {"pakistan travel", "travel", ""}
 
-        # Generic / empty query → return everything
+        # Generic / empty query → return everything with images
         if clean in generic:
-            q = db.query(TravelListing).order_by(TravelListing.scraped_at.desc())
+            q = db.query(TravelListing).filter(
+                TravelListing.image_url.isnot(None),
+                TravelListing.image_url != "",
+            ).order_by(TravelListing.scraped_at.desc())
             if limit > 0:
                 q = q.limit(limit)
             rows = q.all()
@@ -116,7 +119,9 @@ def search_in_db(query: str, limit: int = 0) -> List[Dict[str, Any]]:
             logger.info("[TravelSearch] DB miss for '%s'", query)
             return []
 
-        logger.info("[TravelSearch] DB hit: %d results for '%s'", len(rows), query)
+        # Only return rows with images
+        rows = [r for r in rows if r.image_url and r.image_url.strip()]
+        logger.info("[TravelSearch] DB hit: %d results for '%s' (with images)", len(rows), query)
         return [_row_to_dict(r) for r in rows]
 
     except Exception as exc:

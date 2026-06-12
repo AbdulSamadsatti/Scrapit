@@ -12,41 +12,38 @@ from scraping_engine.core.travel_search_services import search_travel
 logger = logging.getLogger(__name__)
 
 TRAVEL_QUERIES = [
-    # Northern Pakistan
-    "Hunza hotels",
-    "Skardu hotels",
-    "Gilgit hotels",
-    "Naran hotels",
-    "Swat hotels",
-    "Murree hotels",
-    "Chitral hotels",
-    "Kaghan valley hotels",
-    # Major cities
-    "Islamabad hotels",
-    "Karachi hotels",
-    "Lahore hotels",
-    "Peshawar hotels",
-    "Quetta hotels",
-    "Multan hotels",
-    "Faisalabad hotels",
-    "Rawalpindi hotels",
-    # International
-    "Dubai hotels",
-    "Istanbul hotels",
-    "Bangkok hotels",
-    "Baku hotels",
-    "Kuala Lumpur hotels",
-    "London hotels",
-    "Maldives hotels",
-    "Cairo hotels",
+    # Northern Pakistan hotels
+    "Hunza hotels Pakistan",
+    "Skardu hotels Pakistan",
+    "Gilgit hotels Pakistan",
+    "Naran hotels Pakistan",
+    "Swat hotels Pakistan",
+    "Murree hotels Pakistan",
+    "Chitral hotels Pakistan",
+    "Kaghan valley hotels Pakistan",
+    "Fairy Meadows hotels Pakistan",
+    "Neelum Valley hotels Pakistan",
+    # Major cities hotels
+    "Islamabad hotels Pakistan",
+    "Karachi hotels Pakistan",
+    "Lahore hotels Pakistan",
+    "Peshawar hotels Pakistan",
+    "Rawalpindi hotels Pakistan",
+    # Tour packages
+    "Hunza tour package",
+    "Skardu tour package",
+    "Swat tour package",
+    "Naran Kaghan tour package",
+    "Northern Pakistan tour",
+    "Pakistan honeymoon package",
+    "Pakistan family tour",
     # Flights
     "Karachi to Islamabad flight",
     "Lahore to Islamabad flight",
     "Karachi to Lahore flight",
     "Islamabad to Skardu flight",
-    "Karachi to Dubai flight",
-    "Lahore to Dubai flight",
-    "Islamabad to Istanbul flight",
+    "Islamabad to Gilgit flight",
+    "Pakistan domestic flights",
 ]
 
 BATCH_SIZE = 3
