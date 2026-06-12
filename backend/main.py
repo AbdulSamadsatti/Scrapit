@@ -14,7 +14,6 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-
 from fastapi import FastAPI, Query, HTTPException, BackgroundTasks
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
@@ -32,6 +31,11 @@ from scraping_engine.search_services import (
 )
 from scraping_engine.property_search_services import search_property, search_in_db
 from scraping_engine.core.property_runner import scrape_property_detail
+from scraping_engine.serp.google_job import scrape_google_jobs
+from scraping_engine.core.travel_runner import (
+    flatten_travel_results,
+    run_all_travel_scrapers,
+)
 
 # Database imports
 from app.database import Base, SessionLocal, engine
@@ -527,11 +531,9 @@ async def job_detail(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ===========================================================================
-#  PROPERTY / REAL-ESTATE  (zameen / olx / graana)
+# ====================================================================#  PROPERTY / REAL-ESTATE  (zameen / olx / graana)
 #  jobs jaisa hi pattern: redis cache -> DB -> live scrape, with redis_lock
-# ===========================================================================
-
+# ====================================================================
 PROPERTY_SOURCE_PRIORITY = {
     "zameen": 1,
     "graana": 2,
@@ -750,6 +752,33 @@ async def property_detail(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"/api/property/detail error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/travel")
+async def fetch_travel(
+    q: str = Query("Hunza tour", description="Travel search query, e.g., 'Hunza tour'"),
+    max_items: int = Query(5, ge=1, le=20, description="Maximum items per travel source"),
+):
+    """
+    Fetch travel listings from Kipgo, Sastaticket, and Bookme.
+    """
+    try:
+        results = await run_in_threadpool(
+            run_all_travel_scrapers,
+            query=q,
+            max_items_per_site=max_items,
+        )
+        travel_items = flatten_travel_results(results)
+        return {
+            "status": "success",
+            "source": "live_travel_scrape",
+            "query": q,
+            "total_results": len(travel_items),
+            "results_by_source": results,
+            "travel_items": travel_items,
+        }
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
