@@ -45,7 +45,7 @@ def purge_all_jobs() -> int:
     return 0
 
 
-def search_in_db(query: str) -> List[Dict[str, Any]]:
+def search_in_db(query: str, shuffle: bool = False, limit: int = 50) -> List[Dict[str, Any]]:
     # Auto-cleanup expired rows before searching
     purge_expired_jobs()
 
@@ -54,14 +54,18 @@ def search_in_db(query: str) -> List[Dict[str, Any]]:
         return []
     try:
         from app.models import JobListing
+        from sqlalchemy import func
         now = datetime.now(timezone.utc)
-        rows = (
-            db.query(JobListing)
-            .filter(JobListing.query.ilike(f"%{query.lower()}%"))
-            .order_by(JobListing.scraped_at.desc())
-            .limit(50)
-            .all()
-        )
+        db_query = db.query(JobListing).filter(JobListing.query.ilike(f"%{query.lower()}%"))
+        
+        if shuffle:
+            import random
+            total = db_query.count()
+            offset = random.randint(0, max(total - limit, 0))
+            rows = db_query.offset(offset).limit(limit).all()
+        else:
+            db_query = db_query.order_by(JobListing.scraped_at.desc())
+            rows = db_query.limit(limit).all()
         if not rows:
             logger.info(f"[SearchService] DB miss for '{query}'")
             return []
@@ -148,12 +152,13 @@ def search_jobs(
     query: str,
     max_jobs_per_site: int = 10,
     force_scrape: bool = False,
+    shuffle: bool = False,
 ) -> Dict[str, Any]:
     logger.info(f"[SearchService] Query='{query}' force_scrape={force_scrape}")
 
     # Step 1: Check DB first
     if not force_scrape:
-        cached = search_in_db(query)
+        cached = search_in_db(query, shuffle=shuffle, limit=max_jobs_per_site * 3)
         if cached:
             return {
                 "status":        "success",
@@ -169,19 +174,59 @@ def search_jobs(
 
     raw = run_all_scrapers(scrape_query, max_jobs_per_site=max_jobs_per_site)
 
-    all_jobs: List[Dict[str, Any]] = []
+    # Aggregate and validate jobs from all sources
+    source_lists: Dict[str, List[Dict[str, Any]]] = {}
     for source_key, source_data in raw.items():
         if isinstance(source_data, dict):
-            all_jobs.extend(source_data.get("data", []))
+            valid_jobs = []
+            for job in source_data.get("data", []):
+                # Mandatory Fields Validation for Jobs: Title, Link, and Image (Logo/Banner)
+                # Salary is optional as per user feedback
+                title = (job.get("title") or "").strip()
+                link = (job.get("apply_link") or "").strip()
+                image = (job.get("logo") or "").strip() or (job.get("banner") or "").strip()
 
-    logger.info(f"[SearchService] Scraped {len(all_jobs)} total jobs")
+                # CareerOkay listings often have no logo — apply a fallback placeholder
+                # so they pass validation and aren't silently discarded
+                if not image and source_key == "careerokay":
+                    job = job.copy()
+                    job["logo"] = "https://www.careerokay.com/favicon.ico"
+                    image = job["logo"]
+
+                if not title or not link or not image:
+                    continue
+                
+                job_copy = job.copy()
+                job_copy["source"] = source_key
+                valid_jobs.append(job_copy)
+            source_lists[source_key] = valid_jobs
+
+    logger.info(f"[SearchService] Valid jobs per source: { {k: len(v) for k, v in source_lists.items()} }")
+
+    # Round Robin Distribution logic to ensure perfectly equal representation
+    max_total = max_jobs_per_site * max(1, len(source_lists))
+    selected: List[Dict[str, Any]] = []
+    
+    while len(selected) < max_total:
+        added_in_round = False
+        for source_key in list(source_lists.keys()):
+            if source_lists[source_key]:
+                selected.append(source_lists[source_key].pop(0))
+                added_in_round = True
+                if len(selected) >= max_total:
+                    break
+        if not added_in_round:
+            break
+
+    # Use the selected list as final result
+    final_jobs = selected
 
     # Step 3: Save to DB
-    save_to_db(query, all_jobs)
+    save_to_db(query, final_jobs)
 
     return {
         "status":        "success",
         "source":        "live_scrape",
-        "total_results": len(all_jobs),
-        "jobs":          all_jobs,
+        "total_results": len(final_jobs),
+        "jobs":          final_jobs,
     }

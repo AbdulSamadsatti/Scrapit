@@ -1,18 +1,16 @@
 /**
  * JobsList.tsx
  * Drop-in jobs list with skeleton loading + empty state.
- * Use inside any ScrollView — it does NOT scroll itself.
+ * Renders as flat View (no ScrollView) — must be placed inside a parent ScrollView.
  */
-import React, { useContext } from "react";
+import React from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  RefreshControl,
 } from "react-native";
 import JobCard, { Job } from "@/components/JobCard";
-import RefreshContext from "@/contexts/RefreshContext";
+
 import InfinityLoader from "@/components/ui/InfinityLoader";
 
 // ── Skeleton loader ───────────────────────────────────────────────
@@ -56,8 +54,6 @@ function Empty({ msg }: { msg?: string }) {
   );
 }
 
-
-
 // ── Props ─────────────────────────────────────────────────────────
 interface JobsListProps {
   jobs: Job[];
@@ -67,13 +63,8 @@ interface JobsListProps {
   headerTitle?: string;
   /** Limit visible items (home screen preview mode) */
   maxItems?: number;
-  /** Pull-to-refresh callback (optional — context refreshAll is used if omitted) */
-  onRefresh?: () => void;
-  /**
-   * External refreshing state.
-   * Renamed from `refreshing` to avoid conflict with context's `refreshing`.
-   */
-  externalRefreshing?: boolean;
+  /** Whether data is currently being refreshed (shows loader) */
+  refreshing?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────
@@ -83,49 +74,17 @@ const JobsList: React.FC<JobsListProps> = ({
   emptyMessage,
   headerTitle,
   maxItems,
-  onRefresh,
-  externalRefreshing = false,   // ← renamed prop (was `refreshing`)
+  refreshing = false,
 }) => {
-  // Pull refreshing + refreshAll from context
-  const { refreshing: contextRefreshing, refreshAll } = useContext(RefreshContext);
-
-  // Merge: either the external caller says we're refreshing, or the context says so
-  const isRefreshing = externalRefreshing || contextRefreshing;
-
-  const handleRefresh = React.useCallback(async () => {
-    try {
-      // Always call context refreshAll so DB results update
-      await refreshAll();
-      // Also call the parent's onRefresh if provided
-      if (onRefresh) await onRefresh();
-    } catch (e) {
-      console.error("Refresh error:", e);
-    }
-  }, [refreshAll, onRefresh]);
-
   // ── Loading state — show 3 skeleton cards ──────────────────────
   if (loading) {
     return (
-      <ScrollView
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor="transparent"
-            colors={["transparent"]}
-          />
-        }
-      >
-        {isRefreshing && (
-          <View style={S.loaderWrapper}>
-            <InfinityLoader color1="#4F63FF" color2="#A78BFA" size={0.6} />
-          </View>
-        )}
+      <View>
         {headerTitle ? <Text style={S.header}>{headerTitle}</Text> : null}
         <Skeleton />
         <Skeleton />
         <Skeleton />
-      </ScrollView>
+      </View>
     );
   }
 
@@ -135,23 +94,7 @@ const JobsList: React.FC<JobsListProps> = ({
 
   // ── Loaded state ───────────────────────────────────────────────
   return (
-    <ScrollView
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={handleRefresh}
-          tintColor="transparent"
-          colors={["transparent"]}
-        />
-      }
-    >
-      {/* Show InfinityLoader at top while refreshing */}
-      {isRefreshing && (
-        <View style={S.loaderWrapper}>
-          <InfinityLoader color1="#4F63FF" color2="#A78BFA" size={0.6} />
-        </View>
-      )}
-
+    <View>
       {headerTitle ? <Text style={S.header}>{headerTitle}</Text> : null}
 
       {list.map((item, index) => (
@@ -160,7 +103,7 @@ const JobsList: React.FC<JobsListProps> = ({
           job={item}
         />
       ))}
-    </ScrollView>
+    </View>
   );
 };
 

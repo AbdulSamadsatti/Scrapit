@@ -73,8 +73,8 @@ def discover_jobs_via_serp(
         direct_url = ""
         for opt in apply_options:
             link = opt.get("link", "")
-            # LinkedIn, Indeed, Rozee — prefer inhe
-            if any(site in link for site in ["linkedin.com", "indeed.com", "rozee.pk"]):
+            # LinkedIn, CareerOkay — prefer inhe
+            if any(site in link for site in ["linkedin.com", "careerokay.com"]):
                 direct_url = link
                 break
         # Fallback: pehla available link
@@ -122,15 +122,10 @@ _ENRICHMENT_SELECTORS = {
         "posted_date": "span.posted-time-ago__text",
         "salary":      "div.compensation__salary-range, span.salary",
     },
-    "indeed.com": {
-        "description": "div#jobDescriptionText",
-        "posted_date": "span.date, span[data-testid='myJobsStateDate']",
-        "salary":      "div#salaryInfoAndJobType span",
-    },
-    "rozee.pk": {
-        "description": "div.j-desc, div.job-detail-desc",
-        "posted_date": "span.time, span.posted",
-        "salary":      "span.salary, div.salary-detail",
+    "careerokay.com": {
+        "description": "article, [class*='description']",
+        "posted_date": "time, [class*='date']",
+        "salary":      "[class*='salary']",
     },
 }
 

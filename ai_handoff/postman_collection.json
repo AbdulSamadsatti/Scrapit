@@ -1,0 +1,89 @@
+{
+  "info": {
+    "name": "AI Handoff API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Get Dataset",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/dataset?domain=ecommerce&limit=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "ai", "dataset"],
+          "query": [
+            {"key": "domain", "value": "ecommerce"},
+            {"key": "limit", "value": "10"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Item",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/item?domain=jobs&id=job_1",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "ai", "item"],
+          "query": [
+            {"key": "domain", "value": "jobs"},
+            {"key": "id", "value": "job_1"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Search Items",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/search?domain=property&q=apartment&limit=5",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "ai", "search"],
+          "query": [
+            {"key": "domain", "value": "property"},
+            {"key": "q", "value": "apartment"},
+            {"key": "limit", "value": "5"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Post Event",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"event\": \"test\", \"user_id\": \"user123\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/events",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "ai", "events"]
+        }
+      }
+    },
+    {
+      "name": "Get Recommendations",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/ai/recommendations?user_id=user123&limit=3",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "ai", "recommendations"],
+          "query": [
+            {"key": "user_id", "value": "user123"},
+            {"key": "limit", "value": "3"}
+          ]
+        }
+      }
+    }
+  ]
+}

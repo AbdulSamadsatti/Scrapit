@@ -22,7 +22,7 @@ export default function Liked() {
   const resolveImage = (u?: string) =>
     u && /^https?:/.test(u)
       ? u
-      : "https://via.placeholder.com/300x300?text=Image";
+      : "https://placehold.co/300x300?text=Image";
 
   return (
     <SafeAreaView style={styles.container}>

@@ -1,5 +1,5 @@
 export const getBaseUrl = (): string => {
-  const hostname = process.env.REACT_NATIVE_PACKAGER_HOSTNAME || "192.168.0.103";
-  const port = 8000;
-  return `http://${hostname}:${port}`;
+  // Use BACKEND_URL env var if set, otherwise default to local network IP for Expo
+  const baseUrl = process.env.BACKEND_URL || "http://192.168.0.101:8000";
+  return baseUrl;
 };

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { getBaseUrl } from '@/utils/getBaseUrl';
 
@@ -16,7 +16,7 @@ export const RefreshProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [refreshing, setRefreshing] = useState(false);
 
   const refreshAll = useCallback(async () => {
-    console.log('RefreshAll called');
+
     setRefreshing(true);
     try {
       const response = await fetch(`${getBaseUrl()}/api/refresh-all`);
@@ -29,15 +29,13 @@ export const RefreshProvider: React.FC<{ children: ReactNode }> = ({ children })
       console.error(e);
       Alert.alert('Refresh Error', (e as Error).message);
     } finally {
-      console.log('RefreshAll completed, setting refreshing false');
+
       setRefreshing(false);
     }
   }, []);
 
-  // Log state changes for debugging
-  useEffect(() => {
-    console.log('RefreshContext refreshing state:', refreshing);
-  }, [refreshing]);
+
+
   return (
     <RefreshContext.Provider value={{ refreshing, refreshAll }}>
       {children}

@@ -11,19 +11,25 @@ import {
   FlatList,
   Platform,
   StatusBar,
+  RefreshControl,
 } from "react-native";
-import { Sidebar } from "@/components/ui/Sidebar";
-import Carousel3D from "@/components/ui/animated Carousels";
-import LottieHamburger from "@/components/ui/Hamburger";
+import { Sidebar } from "../components/ui/Sidebar";
+import Carousel3D from "../components/ui/animated Carousels";
+import LottieHamburger from "../components/ui/Hamburger";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { InteractiveMenu } from "@/components/ui/modern-mobile-menu";
-import InfinityLoader from "@/components/ui/InfinityLoader";
-import { SearchBar } from "@/components/ui/search-bar";
+import { InteractiveMenu } from "../components/ui/modern-mobile-menu";
+import InfinityLoader from "../components/ui/InfinityLoader";
+import { SearchBar } from "../components/ui/search-bar";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCart } from "@/contexts/CartContext";
-import JobsList from "@/components/JobsList";
-import { getJobs, Job } from "@/services/jobsApi";
+import { useCart } from "../contexts/CartContext";
+import { useAppLoading } from "@/contexts/AppLoadingContext";
+import JobsList from "../components/JobsList";
+import { getJobs, Job } from "../services/jobsApi";
+import ProductsList from "../components/product-list";
+import { getProducts, Product } from "../services/productApi";
+import PropertyList from "../components/Property-list";
+import { getProperties, Property } from "../services/propertyApi";
 import {
   Home,
   ShoppingCart,
@@ -183,6 +189,19 @@ export default function HomeScreen() {
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsRefreshing, setJobsRefreshing] = useState(false);
   const [jobsError, setJobsError] = useState<string | null>(null);
+  const [liveProducts, setLiveProducts] = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsRefreshing, setProductsRefreshing] = useState(false);
+  const [productsError, setProductsError] = useState<string | null>(null);
+  const [liveProperties, setLiveProperties] = useState<Property[]>([]);
+  const [propertiesLoading, setPropertiesLoading] = useState(false);
+  const [propertiesRefreshing, setPropertiesRefreshing] = useState(false);
+  const [propertiesError, setPropertiesError] = useState<string | null>(null);
+
+  const lastFetchedJobsQueryRef = useRef<string | null>(null);
+  const lastFetchedProductsQueryRef = useRef<string | null>(null);
+  const lastFetchedPropertiesQueryRef = useRef<string | null>(null);
+  const isFirstSearchRenderRef = useRef(true);
 
   const scrollY = useRef(new Animated.Value(0)).current;
   const categoriesAnim = useRef(new Animated.Value(0)).current;
@@ -197,7 +216,7 @@ export default function HomeScreen() {
   const resolveImage = (u: string) =>
     u && /^https?:/.test(u)
       ? u
-      : "https://via.placeholder.com/400x300?text=Image";
+      : "https://placehold.co/400x300?text=Image";
 
   const getFilterPanelHeight = useCallback(() => {
     if (!isFilterOpen) return 0;
@@ -297,37 +316,153 @@ export default function HomeScreen() {
     });
   }, [searchQuery, selectedCategory]);
 
-  const fetchJobsData = useCallback(async (forceRefresh = false) => {
-    if (!forceRefresh) {
-      setJobsLoading(true);
-    } else {
+  const { runWithLoader } = useAppLoading();
+  const [refreshing, setRefreshing] = useState(false);
+
+  // ---------- JOBS ----------
+  const fetchJobsData = useCallback(async (
+    forceRefresh = false,
+    shuffle = false
+  ) => {
+    const query = searchQuery.trim();
+    const isSameQuery = lastFetchedJobsQueryRef.current === query;
+    if (!forceRefresh && !shuffle && liveJobs.length > 0 && isSameQuery) return;
+    lastFetchedJobsQueryRef.current = query;
+
+    // Always show skeleton on every fetch so UI doesn't feel frozen during query changes
+    setJobsLoading(true);
+    if (forceRefresh || shuffle) {
       setJobsRefreshing(true);
     }
     setJobsError(null);
     try {
-      const query = searchQuery.trim() || "developer";
-      const data = await getJobs(query, 25, false, forceRefresh);
+      const targetQuery = query;
+      const data = await getJobs(targetQuery, 25, { forceRefresh, shuffle, refreshToken: shuffle ? Date.now().toString() : undefined });
       setLiveJobs(data);
     } catch (e) {
       setJobsError((e as Error).message);
     } finally {
-      if (!forceRefresh) {
-        setJobsLoading(false);
-      } else {
-        setJobsRefreshing(false);
-      }
+      setJobsLoading(false);
+      setJobsRefreshing(false);
     }
+  }, [searchQuery, liveJobs.length]);
+
+  // ---------- PRODUCTS ----------
+  const fetchProductsData = useCallback(async (
+    forceRefresh = false,
+    shuffle = false
+  ) => {
+    const query = searchQuery.trim();
+    const isSameQuery = lastFetchedProductsQueryRef.current === query;
+    if (!forceRefresh && !shuffle && liveProducts.length > 0 && isSameQuery) return;
+    lastFetchedProductsQueryRef.current = query;
+
+    // Always show skeleton on every fetch so UI doesn't feel frozen during query changes
+    setProductsLoading(true);
+    if (forceRefresh || shuffle) {
+      setProductsRefreshing(true);
+    }
+    setProductsError(null);
+    try {
+      const targetQuery = query;
+      const data = await getProducts(targetQuery, 60, { forceRefresh, shuffle, refreshToken: shuffle ? Date.now().toString() : undefined });
+      setLiveProducts(data);
+    } catch (e) {
+      setProductsError((e as Error).message);
+    } finally {
+      setProductsLoading(false);
+      setProductsRefreshing(false);
+    }
+  }, [searchQuery, liveProducts.length]);
+
+  // ---------- PROPERTIES ----------
+  const fetchPropertyData = useCallback(async (
+    forceRefresh = false,
+    shuffle = false
+  ) => {
+    const query = searchQuery.trim();
+    const isSameQuery = lastFetchedPropertiesQueryRef.current === query;
+    if (!forceRefresh && !shuffle && liveProperties.length > 0 && isSameQuery) return;
+    lastFetchedPropertiesQueryRef.current = query;
+
+    // Always show skeleton on every fetch so UI doesn't feel frozen during query changes
+    setPropertiesLoading(true);
+    if (forceRefresh || shuffle) {
+      setPropertiesRefreshing(true);
+    }
+    setPropertiesError(null);
+    try {
+      const targetQuery = query;
+      const data = await getProperties(targetQuery, 40, { forceRefresh, shuffle, refreshToken: shuffle ? Date.now().toString() : undefined });
+      setLiveProperties(data);
+    } catch (e) {
+      setPropertiesError((e as Error).message);
+    } finally {
+      setPropertiesLoading(false);
+      setPropertiesRefreshing(false);
+    }
+  }, [searchQuery, liveProperties.length]);
+
+  // Pull-to-refresh — only InfinityLoader, no overlay
+  const handlePullRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (selectedCategory === "Jobs") {
+        await fetchJobsData(false, true);
+      } else if (selectedCategory === "E-Commerce") {
+        await fetchProductsData(false, true);
+      } else if (selectedCategory === "Property") {
+        await fetchPropertyData(false, true);
+      }
+    } catch (e) {
+      console.error('Pull refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [selectedCategory, fetchJobsData, fetchProductsData, fetchPropertyData]);
+
+  // Pre-fetch ALL domains on mount so category switching is instant
+  const hasFetchedRef = useRef(false);
+  useEffect(() => {
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+    // Fire all 3 in parallel — no overlay, just inline skeletons
+    fetchJobsData();
+    fetchProductsData();
+    fetchPropertyData();
+  }, []);
+
+  // Re-fetch on search query change (debounced 200ms)
+  useEffect(() => {
+    if (isFirstSearchRenderRef.current) {
+      isFirstSearchRenderRef.current = false;
+      return;
+    }
+    const delayDebounceFn = setTimeout(() => {
+      if (selectedCategory === "Jobs") {
+        setLiveJobs([]); // clear to show skeleton
+        fetchJobsData();
+      } else if (selectedCategory === "E-Commerce") {
+        setLiveProducts([]);
+        fetchProductsData();
+      } else if (selectedCategory === "Property") {
+        setLiveProperties([]);
+        fetchPropertyData();
+      }
+    }, 200);
+    return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
 
+  // Fetch when category changes to align with current query state
   useEffect(() => {
     if (selectedCategory === "Jobs") {
-      const delayDebounceFn = setTimeout(() => {
-        fetchJobsData();
-      }, 500);
-
-      return () => clearTimeout(delayDebounceFn);
+      fetchJobsData();
+    } else if (selectedCategory === "E-Commerce") {
+      fetchProductsData();
+    } else if (selectedCategory === "Property") {
+      fetchPropertyData();
     }
-  }, [searchQuery, selectedCategory, fetchJobsData]);
+  }, [selectedCategory, fetchJobsData, fetchProductsData, fetchPropertyData]);
 
   useEffect(() => {
     // Entrance animations
@@ -603,7 +738,7 @@ export default function HomeScreen() {
               {
                 zIndex:
                   activeFilterDropdown === "price" ||
-                  activeFilterDropdown === "location"
+                    activeFilterDropdown === "location"
                     ? 3000
                     : 1000,
               },
@@ -700,7 +835,7 @@ export default function HomeScreen() {
               {
                 zIndex:
                   activeFilterDropdown === "date" ||
-                  activeFilterDropdown === "time"
+                    activeFilterDropdown === "time"
                     ? 2000
                     : 500,
               },
@@ -818,6 +953,17 @@ export default function HomeScreen() {
         )}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingBottom: 60, flexGrow: 1 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handlePullRefresh}
+            tintColor="transparent"
+            colors={["transparent"]}
+            style={{ backgroundColor: 'transparent' }}
+            progressBackgroundColor="transparent"
+            progressViewOffset={-500}
+          />
+        }
       >
         <Animated.View
           style={{
@@ -831,6 +977,13 @@ export default function HomeScreen() {
             ],
           }}
         >
+          {/* Inline InfinityLoader for pull-to-refresh */}
+          {refreshing && (
+            <View style={{ alignItems: 'center', paddingVertical: 18 }}>
+              <InfinityLoader color1="#4F63FF" color2="#A78BFA" size={0.6} />
+            </View>
+          )}
+
           {/* Hero Carousel - 3D Animated */}
           <Carousel3D data={HERO_ITEMS} />
 
@@ -850,10 +1003,16 @@ export default function HomeScreen() {
             contentContainerStyle={styles.categoriesList}
           />
 
-          {/* Trending / Jobs Section */}
+          {/* Trending / Jobs / Products Section */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
-              {selectedCategory === "Jobs" ? "Available Jobs" : "Trending Now"}
+              {selectedCategory === "Jobs"
+                ? "Available Jobs"
+                : selectedCategory === "E-Commerce"
+                  ? "Available Products"
+                  : selectedCategory === "Property"
+                    ? "Available Properties"
+                    : "Trending Now"}
             </Text>
             <TouchableOpacity activeOpacity={0.7}>
               <Text style={styles.seeMore}>See more {">"}</Text>
@@ -865,22 +1024,47 @@ export default function HomeScreen() {
               {jobsError ? (
                 <Text style={{ color: "red", padding: 20 }}>Error: {jobsError}</Text>
               ) : (
-                <JobsList jobs={liveJobs} loading={jobsLoading} externalRefreshing={jobsRefreshing} onRefresh={() => fetchJobsData(true)} />
+                <JobsList jobs={liveJobs} loading={jobsLoading} refreshing={jobsRefreshing} />
+              )}
+            </View>
+          ) : selectedCategory === "E-Commerce" ? (
+            <View style={{ paddingHorizontal: 0 }}>
+              {productsError ? (
+                <Text style={{ color: "red", padding: 20 }}>Error: {productsError}</Text>
+              ) : (
+                <ProductsList
+                  products={liveProducts}
+                  loading={productsLoading}
+                  refreshing={productsRefreshing}
+                  emptyMessage="Try searching for mobiles, laptops, watches, or accessories."
+                />
+              )}
+            </View>
+          ) : selectedCategory === "Property" ? (
+            <View style={{ paddingHorizontal: 0 }}>
+              {propertiesError ? (
+                <Text style={{ color: "red", padding: 20 }}>Error: {propertiesError}</Text>
+              ) : (
+                <PropertyList
+                  properties={liveProperties}
+                  loading={propertiesLoading}
+                  emptyMessage="Search houses, flats, plots for sale or rent."
+                />
               )}
             </View>
           ) : (
             <View style={styles.trendingGrid}>
               {filteredTrendingItems.map((item, index) => (
-              <React.Fragment key={item.id}>
-                {renderTrendingItem({ item, index })}
-              </React.Fragment>
-            ))}
-            {filteredTrendingItems.length === 0 && (
-              <View style={styles.noResults}>
-                <Ionicons name="search-outline" size={48} color="#CCC" />
-                <Text style={styles.noResultsText}>No items found</Text>
-              </View>
-            )}
+                <React.Fragment key={item.id}>
+                  {renderTrendingItem({ item, index })}
+                </React.Fragment>
+              ))}
+              {filteredTrendingItems.length === 0 && (
+                <View style={styles.noResults}>
+                  <Ionicons name="search-outline" size={48} color="#CCC" />
+                  <Text style={styles.noResultsText}>No items found</Text>
+                </View>
+              )}
             </View>
           )}
         </Animated.View>

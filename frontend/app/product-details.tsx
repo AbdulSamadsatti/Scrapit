@@ -19,14 +19,14 @@ import { useCart } from "../contexts/CartContext";
 // ── Source config ─────────────────────────────────────────────────
 const SOURCE_COLORS: Record<string, string> = {
   linkedin: "#0A66C2",
-  rozee: "#C8102E",
-  indeed: "#2557A7",
+  careerokay: "#C8102E",
+  mustakbil: "#1778F2",
   google_jobs: "#4285F4",
 };
 const SOURCE_LABELS: Record<string, string> = {
   linkedin: "LinkedIn",
-  rozee: "Rozee.pk",
-  indeed: "Indeed",
+  careerokay: "CareerOkay",
+  mustakbil: "Mustakbil",
   google_jobs: "Google Jobs",
 };
 
@@ -34,7 +34,7 @@ const SOURCE_LABELS: Record<string, string> = {
 function cleanSalary(raw: string): string {
   if (!raw?.trim()) return "Salary not disclosed";
   const s = raw.trim();
-  const blocked = ["google_jobs", "google", "linkedin", "rozee", "indeed", "rozee.pk", "n/a", "-", ""];
+  const blocked = ["google_jobs", "google", "linkedin", "careerokay", "n/a", "-"];
   if (blocked.includes(s.toLowerCase())) return "Salary not disclosed";
   if (!/\d/.test(s)) return "Salary not disclosed";
   return /^(rs\.?|pkr|usd|\$)/i.test(s) ? s : `Rs ${s}`;
@@ -242,24 +242,40 @@ function JobDetail({
 // ════════════════════════════════════════════════════════════════════
 function ProductDetail({
   id, title, rawPrice, image, location, type, postedDate,
-  category, description, onBack,
+  category, description, productLink, sourceLabel, rating, reviewCount, sellerName, brand, onBack,
   addToCart, toggleLike, isLiked,
+  beds, baths, area, purpose, propertyType,
 }: any) {
   const scrollY = useRef(new Animated.Value(0)).current;
   const liked = isLiked(id);
 
-  const formatPrice = (p: string) =>
-    `Rs ${(p || "").replace(/^(rs|RS)\s*/i, "")}`;
-  const resolveImage = (u: string) =>
-    u && /^https?:/.test(u)
-      ? u
+  const formatPrice = (p: string) => {
+    if (!p?.trim()) return "";
+    const s = p.trim();
+    if (/^(pkr|rs|usd|\$)/i.test(s)) return s;
+    return `Rs ${s}`;
+  };
+  const resolveImage = (u: string) => {
+    let uri = u || "";
+    if (uri.startsWith("//")) uri = "https:" + uri;
+    return uri && /^https?:/.test(uri)
+      ? uri
       : "https://images.unsplash.com/photo-1553275100-834bb1406c43?q=80&w=800&auto=format&fit=crop";
+  };
 
   const autoDescription = description ||
     `${title} — ${type} available in ${location}. Posted ${postedDate}.`;
 
   const highlights = ["Trusted seller", "Fast response", "Secure payment", "Quality checked"];
-  const itemPayload = { id, title, price: rawPrice, image, location, type, postedDate, category };
+  const itemPayload = { id, title, price: rawPrice, image, location, type, postedDate, category, link: productLink };
+
+  function handleOpenProduct() {
+    if (!productLink) {
+      Alert.alert("No Link", "Product link is not available.");
+      return;
+    }
+    Linking.openURL(productLink).catch(() => Alert.alert("Error", "Could not open product link."));
+  }
 
   return (
     <SafeAreaView style={S.container}>
@@ -272,7 +288,7 @@ function ProductDetail({
           <TouchableOpacity onPress={onBack} style={S.backBtn}>
             <Ionicons name="arrow-back" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={S.headerTitle}>Product Details</Text>
+          <Text style={S.headerTitle}>{category === "Property" ? "Property Details" : "Product Details"}</Text>
           <View style={{ width: 40 }} />
         </View>
       </LinearGradient>
@@ -314,14 +330,57 @@ function ProductDetail({
               <Text style={PD.metaTxt} numberOfLines={1}>{location}</Text>
             </View>
             <View style={PD.metaItem}>
-              <Ionicons name="pricetag-outline" size={16} color="#1E7C7E" />
+              <Ionicons name="storefront-outline" size={16} color="#1E7C7E" />
               <Text style={PD.metaTxt} numberOfLines={1}>{type}</Text>
             </View>
           </View>
+          {rating || sellerName ? (
+            <View style={PD.metaRow}>
+              {rating ? (
+                <View style={PD.metaItem}>
+                  <Ionicons name="star" size={16} color="#F5A623" />
+                  <Text style={PD.metaTxt} numberOfLines={1}>
+                    {rating}{reviewCount ? ` (${reviewCount})` : ""}
+                  </Text>
+                </View>
+              ) : null}
+              {sellerName ? (
+                <View style={PD.metaItem}>
+                  <Ionicons name="person-circle-outline" size={16} color="#1E7C7E" />
+                  <Text style={PD.metaTxt} numberOfLines={1}>{sellerName}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Property Features */}
+          {category === "Property" && (beds || baths || area) ? (
+            <View style={PD.propertyFeaturesRow}>
+              {beds ? (
+                <View style={PD.propertyFeature}>
+                  <Ionicons name="bed-outline" size={18} color="#1E7C7E" />
+                  <Text style={PD.propertyFeatureText}>{beds} Beds</Text>
+                </View>
+              ) : null}
+              {baths ? (
+                <View style={PD.propertyFeature}>
+                  <Ionicons name="water-outline" size={18} color="#1E7C7E" />
+                  <Text style={PD.propertyFeatureText}>{baths} Baths</Text>
+                </View>
+              ) : null}
+              {area ? (
+                <View style={PD.propertyFeature}>
+                  <Ionicons name="resize-outline" size={18} color="#1E7C7E" />
+                  <Text style={PD.propertyFeatureText}>{area}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={PD.actionsRow}>
-            <TouchableOpacity style={PD.primaryBtn} onPress={() => addToCart(itemPayload)}>
-              <Ionicons name="cart" size={20} color="#fff" />
-              <Text style={PD.primaryTxt}>Add to Cart</Text>
+            <TouchableOpacity style={PD.primaryBtn} onPress={handleOpenProduct}>
+              <Ionicons name="open-outline" size={20} color="#fff" />
+              <Text style={PD.primaryTxt}>{category === "Property" ? "View Listing" : "View Product"}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[PD.secondaryBtn, liked && PD.secondaryBtnActive]}
@@ -355,14 +414,16 @@ function ProductDetail({
           <Text style={PD.sectionTitle}>Details</Text>
           {[
             ["Category", category],
-            ["Posted", postedDate],
+            ["Source", sourceLabel || type],
+            ["Availability", postedDate],
             ["Location", location],
-            ["Type", type],
+            ["Brand", brand],
+            ["Seller", sellerName],
           ].map(([l, v]) => (
-            <View key={l} style={PD.detailRow}>
+            v ? <View key={l} style={PD.detailRow}>
               <Text style={PD.detailLabel}>{l}</Text>
               <Text style={PD.detailValue}>{v}</Text>
-            </View>
+            </View> : null
           ))}
         </View>
       </Animated.ScrollView>
@@ -392,6 +453,17 @@ export default function ProductDetailsScreen() {
   const sourceLabelP = (params.source_label as string) || "";
   const company = (params.company as string) || type;
   const banner = (params.banner as string) || "";
+  const rating = (params.rating as string) || "";
+  const reviewCount = (params.review_count as string) || "";
+  const sellerName = (params.seller_name as string) || "";
+  const brand = (params.brand as string) || "";
+
+  // Property specific fields
+  const beds = (params.beds as string) || "";
+  const baths = (params.baths as string) || "";
+  const area = (params.area as string) || "";
+  const purpose = (params.purpose as string) || "";
+  const propertyType = (params.property_type as string) || "";
 
   const isJob = category === "Jobs";
 
@@ -421,8 +493,11 @@ export default function ProductDetailsScreen() {
       id={id} title={title} rawPrice={rawPrice} image={image}
       location={location} type={type} postedDate={postedDate}
       category={category} description={description}
+      productLink={linkParam} sourceLabel={sourceLabelP} rating={rating}
+      reviewCount={reviewCount} sellerName={sellerName} brand={brand}
       onBack={() => router.back()}
       addToCart={addToCart} toggleLike={toggleLike} isLiked={isLiked}
+      beds={beds} baths={baths} area={area} purpose={purpose} propertyType={propertyType}
     />
   );
 }
@@ -543,6 +618,31 @@ const PD = StyleSheet.create({
   metaItem: { flexDirection: "row", alignItems: "center", gap: 5, flex: 1 },
   metaTxt: { fontSize: 13, color: "#6B7280", flexShrink: 1 },
   actionsRow: { flexDirection: "row", gap: 12, marginTop: 14 },
+
+  propertyFeaturesRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+    paddingTop: 12,
+  },
+  propertyFeature: {
+    flex: 1,
+    backgroundColor: "#EAF6F7",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  propertyFeatureText: {
+    fontSize: 12,
+    color: "#1E7C7E",
+    fontWeight: "700",
+  },
 
   primaryBtn: {
     flex: 1, backgroundColor: "#1E7C7E", paddingVertical: 14,

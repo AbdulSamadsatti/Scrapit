@@ -41,7 +41,7 @@ const AnimatedElement = ({
 );
 
 export default function VerificationScreen() {
-  const { email } = useLocalSearchParams(); // Sirf email — OTP nahi
+  const { email, otp: passedOtp } = useLocalSearchParams();
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [error, setError] = useState("");
@@ -98,12 +98,28 @@ export default function VerificationScreen() {
   }, [fadeAnims, slideAnims]);
 
   const handleOtpChange = (text: string, index: number) => {
+    const cleaned = text.replace(/[^0-9]/g, "");
+    
+    if (cleaned.length > 1) {
+      const newOtp = [...otp];
+      cleaned.split("").forEach((char, i) => {
+        if (index + i < 6) newOtp[index + i] = char;
+      });
+      setOtp(newOtp);
+      const nextIndex = Math.min(index + cleaned.length, 5);
+      if (inputRefs.current[nextIndex]) {
+        inputRefs.current[nextIndex]?.focus();
+      } else {
+        inputRefs.current[5]?.focus();
+      }
+      return;
+    }
+
     const newOtp = [...otp];
-    newOtp[index] = text;
+    newOtp[index] = cleaned;
     setOtp(newOtp);
 
-    // Auto-advance
-    if (text.length === 1 && index < 5) {
+    if (cleaned.length === 1 && index < 5) {
       inputRefs.current[index + 1]?.focus();
     }
   };
@@ -175,36 +191,47 @@ export default function VerificationScreen() {
       setIsVerifying(true);
       setError("");
 
-      const emailKey = getEmailKey(email as string);
+      const emailStr = Array.isArray(email) ? email[0] : (email as string || "");
+      if (!emailStr) {
+        setError("Email missing. Please try signing up again.");
+        setIsVerifying(false);
+        return;
+      }
+      const emailKey = getEmailKey(emailStr);
 
-      // Firestore se OTP fetch karo
-      const otpDoc = await getDoc(doc(db, "otps", emailKey));
+      let validOtp = "";
+      if (passedOtp) {
+        validOtp = Array.isArray(passedOtp) ? passedOtp[0] : passedOtp;
+      }
 
-      if (!otpDoc.exists()) {
+      // Firestore se OTP fetch karo only if not in params
+      if (!validOtp) {
+        const otpDoc = await getDoc(doc(db, "otps", emailKey));
+        if (otpDoc.exists()) {
+          const data = otpDoc.data();
+          if (data.expiresAt.toMillis() > Date.now()) {
+            validOtp = data.otp;
+          } else {
+            await deleteDoc(doc(db, "otps", emailKey)).catch(() => {});
+          }
+        }
+      }
+
+      if (!validOtp) {
         setError("OTP expired or not found. Please resend.");
         setIsVerifying(false);
         return;
       }
 
-      const data = otpDoc.data();
-
-      // Expiry check karo
-      if (data.expiresAt.toMillis() < Date.now()) {
-        await deleteDoc(doc(db, "otps", emailKey));
-        setError("OTP expired. Please resend.");
-        setIsVerifying(false);
-        return;
-      }
-
       // OTP match karo
-      if (otpString === data.otp) {
-        // OTP delete karo — ek baar use
-        await deleteDoc(doc(db, "otps", emailKey));
+      if (otpString === validOtp) {
+        await deleteDoc(doc(db, "otps", emailKey)).catch(() => {});
         router.replace("/home"); // ✅
       } else {
         setError("Wrong OTP. Please try again.");
       }
-    } catch {
+    } catch (e) {
+      console.log(e);
       setError("Something went wrong. Try again.");
     } finally {
       setIsVerifying(false);
@@ -267,10 +294,10 @@ export default function VerificationScreen() {
                   ref={(ref) => { inputRefs.current[index] = ref; }}
                   style={[styles.otpInput, digit ? styles.otpInputFilled : null, error ? styles.otpInputError : null]}
                   value={digit}
-                  onChangeText={(text) => handleOtpChange(text.replace(/[^0-9]/g, ""), index)}
+                  onChangeText={(text) => handleOtpChange(text, index)}
                   onKeyPress={(e) => handleOtpKeyPress(e, index)}
                   keyboardType="numeric"
-                  maxLength={1}
+                  maxLength={6}
                   selectTextOnFocus
                 />
               ))}

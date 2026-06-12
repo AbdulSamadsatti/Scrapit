@@ -32,12 +32,19 @@ export interface Job {
  * @param excludeGoogle  Strip Google Jobs results
  * @returns Array of Job objects sorted by source priority
  */
+export interface GetJobsOptions {
+  excludeGoogle?: boolean;
+  forceRefresh?: boolean;
+  shuffle?: boolean;
+  refreshToken?: string;
+}
+
 export const getJobs = async (
   query: string,
   maxJobs: number = 25,
-  excludeGoogle: boolean = false,
-  forceRefresh: boolean = false
+  options: GetJobsOptions = {}
 ): Promise<Job[]> => {
+  const { excludeGoogle = false, forceRefresh = false, shuffle = false, refreshToken } = options;
   const base = getBaseUrl();
   let url =
     `${base}/api/jobs` +
@@ -45,7 +52,14 @@ export const getJobs = async (
     `&max_jobs=${maxJobs}` +
     `&exclude_google=${excludeGoogle}`;
   if (forceRefresh) {
-    url += `&force_scrape=true`;
+    url += `&shuffle=true&refresh_token=${Date.now()}`;
+  } else {
+    if (shuffle) {
+      url += `&shuffle=true`;
+    }
+    if (refreshToken) {
+      url += `&refresh_token=${encodeURIComponent(refreshToken)}`;
+    }
   }
   try {
     const response = await fetch(url);

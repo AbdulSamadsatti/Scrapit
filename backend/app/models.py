@@ -382,3 +382,33 @@ class JobListing(Base):
     scraped_at  = Column(DateTime, server_default=func.now(), nullable=False)
     expires_at  = Column(DateTime, nullable=True)
 
+
+class PropertyListing(Base):
+    __tablename__ = "property_listings"
+    __table_args__ = (
+        UniqueConstraint("source", "listing_url", name="unique_property_per_source_url"),
+    )
+
+    id             = Column(Integer, primary_key=True, index=True)
+    query          = Column(String(255), nullable=False, index=True)
+    source         = Column(String(100), nullable=False, default="", index=True)
+    source_label   = Column(String(100), nullable=False, default="")
+    title          = Column(String(500), nullable=False, default="")
+    price          = Column(String(200), nullable=False, default="")
+    price_amount   = Column(Numeric(14, 2), nullable=True, index=True)
+    currency       = Column(String(10), nullable=False, default="PKR")
+    location       = Column(String(300), nullable=False, default="")
+    beds           = Column(String(50), nullable=False, default="")
+    baths          = Column(String(50), nullable=False, default="")
+    area           = Column(String(100), nullable=False, default="")
+    purpose        = Column(String(20), nullable=False, default="")
+    property_type  = Column(String(50), nullable=False, default="")
+    image_url      = Column(Text, nullable=False, default="")
+    listing_url    = Column(Text, nullable=False, default="")
+    description    = Column(Text, nullable=False, default="")
+    agent_name     = Column(String(200), nullable=False, default="")
+    posted_at      = Column(String(100), nullable=False, default="")
+    fingerprint    = Column(String(64), nullable=True, index=True)
+    scraped_at     = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+

@@ -33,22 +33,20 @@ export interface Job {
 // ── Brand colours per source ──────────────────────────────────────
 const SOURCE_COLORS: Record<string, string> = {
   linkedin: "#0A66C2",
-  rozee: "#C8102E",
-  indeed: "#2557A7",
+  careerokay: "#C8102E",
   google_jobs: "#4285F4",
 };
 
 const SOURCE_DISPLAY: Record<string, string> = {
   linkedin: "LinkedIn",
-  rozee: "Rozee.pk",
-  indeed: "Indeed",
+  careerokay: "CareerOkay",
   google_jobs: "Google Jobs",
 };
 
 // ── Salary guard ──────────────────────────────────────────────────
 function safeSalary(raw?: string): string {
   if (!raw?.trim()) return "";
-  const blocked = ["google_jobs", "google", "linkedin", "rozee", "indeed", "rozee.pk", "n/a", "-"];
+  const blocked = ["google_jobs", "google", "linkedin", "careerokay", "mustakbil", "n/a", "-"];
   if (blocked.includes(raw.trim().toLowerCase())) return "";
   if (!/\d/.test(raw)) return "";
   return raw.trim();
@@ -90,7 +88,8 @@ export default function JobCard({ job, onPress }: { job: Job; onPress?: () => vo
   const router = useRouter();
   const [err, setErr] = useState(false);
 
-  const logoUri = job.logo || job.image || job.thumbnail || "";
+  let logoUri = job.logo || job.image || job.thumbnail || "";
+  if (logoUri.startsWith("//")) logoUri = "https:" + logoUri;
   const showLogo = !!logoUri && /^https?:/.test(logoUri) && !err;
   const applyLink = job.apply_link || job.link || job.direct_url || "";
   const salary = safeSalary(job.salary);
